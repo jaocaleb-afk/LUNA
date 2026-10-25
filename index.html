@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LUNA</title><link rel="stylesheet" href="css/luna.css"></head><body>
+<div id="bgl"></div><div id="scrim"></div>
+
+<main id="home" class="screen on" data-screen="home">
+ <!-- The clock is a full-screen layer centred on the display. Nothing else on this screen takes part in its layout. -->
+ <div id="clock"><div id="hm"></div><div id="sec"><i></i></div><div id="date"></div><div id="tzl"></div></div>
+ <!-- Always visible (never hidden by the idle timeout): running-timer readout and the last voice command/response. -->
+ <div id="topinfo">
+  <div id="tbadge" role="timer" hidden><span id="tbt"></span><span id="tbl"></span></div>
+  <div id="vbubble" role="status" aria-live="polite" hidden></div>
+ </div>
+ <div id="vind" role="status" hidden></div>
+ <nav id="dock" aria-label="Main controls">
+  <button class="btn" data-go="timer">Timer</button>
+  <button class="btn" data-go="schedules">Schedules</button>
+  <button class="btn" data-go="assistant">Assistant</button>
+  <button class="btn" data-go="backgrounds">Backgrounds</button>
+  <button class="btn" data-go="settings">Settings</button>
+  <button class="btn pri" id="talk" hidden>🎤 Talk</button>
+ </nav>
+</main>
+
+<section class="screen" data-screen="timer">
+ <div class="top"><button class="btn" data-go="home">Home</button><h2>Timer</h2><button class="btn push" data-go="schedules">Schedules</button></div>
+ <div id="td" role="timer" aria-live="off">0:00</div><div id="tst"></div><div id="tsrc"></div>
+ <div class="row ctr" id="presets"><button class="btn" data-m="1">1 min</button><button class="btn" data-m="2">2 min</button><button class="btn" data-m="5">5 min</button><button class="btn" data-m="10">10 min</button><button class="btn" data-m="15">15 min</button><button class="btn" data-m="30">30 min</button></div>
+ <div class="row ctr" id="tin"><input id="tm" type="number" inputmode="numeric" min="0" max="1439" value="0" aria-label="Minutes"><span>min</span><input id="ts" type="number" inputmode="numeric" min="0" max="59" value="0" aria-label="Seconds"><span>sec</span></div>
+ <div class="row ctr" id="tctl"></div>
+ <div class="card mut" id="tnext"></div>
+</section>
+
+<section class="screen" data-screen="schedules">
+ <div class="top"><button class="btn" data-go="home">Home</button><h2>Schedules</h2><button class="btn push" data-go="timer">Timer</button><button class="btn pri" id="rnew">New rule</button></div>
+ <div class="card mut" id="rinfo">
+  <b>Schedules start a timer for you at a set time.</b> They use this device’s local time zone <span id="rtz"></span>.
+  They only run while this LUNA page is open and the device is awake — nothing runs if the browser is closed or the device is off or asleep.
+  A scheduled start <b>never interrupts</b> a timer that is running or paused: it is skipped and noted in Recent activity. A timer that has already finished is replaced.
+  <div id="rzonewarn" class="warn" hidden></div>
+ </div>
+ <div id="rlist"></div>
+ <div class="card" id="redit" hidden></div>
+ <div class="card"><h3>Recent activity</h3><ul class="log" id="rlog"></ul></div>
+</section>
+
+<section class="screen" data-screen="assistant">
+ <div class="top"><button class="btn" data-go="home">Home</button><h2>Assistant</h2></div>
+ <div class="card" id="vcard"></div>
+ <div class="card" data-cmd></div>
+</section>
+
+<section class="screen" data-screen="backgrounds">
+ <div class="top"><button class="btn" id="bgback">Home</button><h2>Backgrounds</h2><button class="btn" id="bgnew">New</button></div>
+ <div class="lib" id="lib"></div>
+ <div class="ed" id="ed"></div>
+</section>
+
+<section class="screen" data-screen="settings">
+ <div class="top"><button class="btn" data-go="home">Home</button><h2>Settings</h2></div>
+ <div id="sets"></div>
+ <div class="card" id="vset"></div>
+ <div class="card"><h3>Test a command</h3><div data-cmd></div></div>
+ <div class="card"><button class="btn" id="reset">Restore defaults</button></div>
+</section>
+
+<div id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alt"><div id="alt">Time’s up</div><div id="als"></div><button class="btn pri" id="dis">Dismiss</button></div>
+<dialog id="dlg"><p id="dlgt"></p><div class="row"><button class="btn" id="no">Keep</button><button class="btn pri" id="yes">Confirm</button></div></dialog>
+<dialog id="vdlg" aria-labelledby="vdt"><h3 id="vdt"></h3><div id="vdb"></div><div class="row"><button class="btn" id="vno">Cancel</button><button class="btn pri" id="vyes">I understand — allow</button></div></dialog>
+<div id="toast" role="status"></div>
+<script src="js/core/parser.js"></script>
+<script src="js/core/timer-engine.js"></script>
+<script src="js/core/schedule-time.js"></script>
+<script src="js/core/schedule.js"></script>
+<script src="js/core/scheduler.js"></script>
+<script src="js/core/idle.js"></script>
+<script src="js/core/voice-phrases.js"></script>
+<script src="js/core/voice-session.js"></script>
+<script src="js/app/util.js"></script>
+<script src="js/app/settings.js"></script>
+<script src="js/app/nav.js"></script>
+<script src="js/app/clock.js"></script>
+<script src="js/app/background-model.js"></script>
+<script src="js/app/background-library.js"></script>
+<script src="js/app/background-ui.js"></script>
+<script src="js/app/sound.js"></script>
+<script src="js/app/timer-ui.js"></script>
+<script src="js/app/assistant.js"></script>
+<script src="js/app/settings-ui.js"></script>
+<script src="js/app/rules-store.js"></script>
+<script src="js/app/schedule-runner.js"></script>
+<script src="js/app/schedule-format.js"></script>
+<script src="js/app/schedule-editor.js"></script>
+<script src="js/app/schedule-ui.js"></script>
+<script src="js/app/idle-ui.js"></script>
+<script src="js/app/voice-text.js"></script>
+<script src="js/app/voice-view.js"></script>
+<script src="js/app/voice-ui.js"></script>
+<script src="js/app/main.js"></script></body></html>

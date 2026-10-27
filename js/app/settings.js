@@ -3,7 +3,8 @@
 
    Every setting is registered once with a default value and a validator. Values read back from storage
    that fail their validator fall back to the default, so corrupt storage can never break the app.
-   Settings.on(fn) is called with the changed key, or '*' after a reset. */
+   Settings.on(fn) is called with the changed key, or '*' after a reset.
+   Keys that older versions stored but this version no longer has (LEGACY_KEYS) are dropped on load. */
 
 /* Time zones offered for the CLOCK DISPLAY. ('local' = whatever the device is set to.)
    Schedules always use the device's own time zone regardless of this choice. */
@@ -29,6 +30,7 @@ const VLANGS = [
 
 const Settings = (() => {
   const STORAGE_KEY = 'luna.settings.v1';
+  const LEGACY_KEYS = ['wakeOn']; // the removed "Hey LUNA" always-listening switch
   const defaults = {};
   const validators = {};
   const current = {};
@@ -49,6 +51,7 @@ const Settings = (() => {
         const usable = saved && key in saved && validators[key](saved[key]);
         current[key] = usable ? saved[key] : defaults[key];
       }
+      if (saved && LEGACY_KEYS.some((key) => key in saved)) store.set(STORAGE_KEY, current);
     },
 
     get: () => current,
@@ -81,6 +84,6 @@ Settings.register('motion', 'auto', (v) => ['auto', 'reduce', 'full'].includes(v
 Settings.register('sound', true, isBoolean);
 Settings.register('idleSec', 10, (v) => IDLE_CHOICES_SECONDS.includes(v));
 Settings.register('voiceOn', false, isBoolean);
-Settings.register('wakeOn', false, isBoolean);
 Settings.register('voiceLang', 'en-US', (v) => VLANGS.some((l) => l[0] === v));
+Settings.register('speakOn', true, isBoolean);    // spoken replies to voice commands (text replies are always shown)
 Settings.load();

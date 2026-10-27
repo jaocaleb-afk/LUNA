@@ -1,12 +1,25 @@
-/* Tiny test harness shared by the core tests: test(), FakeClock, summary().
+/* Tiny test harness shared by the core tests: test(), FakeClock, done().
+   A test may be async (return a promise); async tests run one after another, after the synchronous ones.
    Sets a US time zone so the daylight-saving cases are deterministic on any machine. */
 process.env.TZ = 'America/Los_Angeles';
 
 let passed = 0, failed = 0;
+let chain = Promise.resolve();
+
+const pass = (name) => { passed++; console.log('PASS ' + name); };
+const fail = (name, e) => { failed++; console.log('FAIL ' + name + '\n     ' + String((e && e.stack) || e).split('\n').slice(0, 4).join('\n     ')); };
 
 function test(name, fn) {
-  try { fn(); passed++; console.log('PASS ' + name); }
-  catch (e) { failed++; console.log('FAIL ' + name + '\n     ' + (e.stack || e).split('\n').slice(0, 4).join('\n     ')); }
+  let result;
+  try { result = fn(); } catch (e) { fail(name, e); return; }
+  if (result && typeof result.then === 'function') {
+    chain = chain.then(() => result.then(() => pass(name), (e) => fail(name, e)));
+  } else pass(name);
+}
+
+/* Like test(), but the body is only started once earlier async tests have finished (so timings do not overlap). */
+function testAsync(name, fn) {
+  chain = chain.then(() => Promise.resolve().then(fn).then(() => pass(name), (e) => fail(name, e)));
 }
 
 /* A manual clock: now(), setTimeout(), clearTimeout(), advance(ms). Timers fire in order as time advances. */
@@ -36,9 +49,12 @@ function FakeClock() {
 /* Local-time Date helper: L(2026, 10, 26, 9, 0) = 26 Oct 2026, 09:00 local. */
 const L = (y, mo, d, h = 0, mi = 0, s = 0) => new Date(y, mo - 1, d, h, mi, s, 0);
 
-function summary() {
-  console.log('\n' + passed + ' passed, ' + failed + ' failed');
-  return failed;
+/* Resolves with the number of failures once every test (including async ones) has finished. */
+function done() {
+  return chain.then(() => {
+    console.log('\n' + passed + ' passed, ' + failed + ' failed');
+    return failed;
+  });
 }
 
-module.exports = { test, FakeClock, L, summary };
+module.exports = { test, testAsync, FakeClock, L, done };

@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(HERE, 'ui'))
 from playwright.sync_api import sync_playwright
 import helpers
 
-ALL = ['legacy', 'layout', 'idle', 'timer', 'schedules', 'schedule_run', 'voice']
+ALL = ['legacy', 'layout', 'idle', 'timer', 'schedules', 'schedule_run', 'voice', 'speech', 'screen_time', 'pin', 'kiosk']
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):

@@ -28,7 +28,7 @@ button,select,input{font:inherit;color:inherit}
 #vbubble .you{color:var(--mute)}#vbubble.err{border-color:#ff8a7a}
 #vind{position:absolute;top:max(12px,2.5vh);right:max(12px,2vw);padding:6px 14px;border-radius:99px;background:var(--glass);border:1px solid var(--line);font-size:15px;pointer-events:none;display:flex;align-items:center;gap:8px}
 #vind i{width:10px;height:10px;border-radius:50%;background:var(--mute);display:inline-block}
-#vind.cmd i{background:#ff6b6b;animation:pulse 1.1s ease-in-out infinite}#vind.wake i{background:var(--dusk)}#vind.err{border-color:#ff8a7a}
+#vind.live i{background:#ff6b6b;animation:pulse 1.1s ease-in-out infinite}#vind.err{border-color:#ff8a7a}
 @keyframes pulse{50%{transform:scale(1.6);opacity:.55}}body.reduced #vind i{animation:none!important}
 #dock{position:absolute;left:0;right:0;bottom:max(14px,3vh);display:flex;flex-wrap:wrap;justify-content:center;gap:12px;padding:0 3vw;transition:opacity .3s}
 #dock .btn{display:flex;align-items:center;justify-content:center;text-align:center}
@@ -79,7 +79,16 @@ body.reduced #bgl{animation:none!important}
 .empty{color:var(--mute);text-align:center;padding:18px}
 /* ---------- Voice ---------- */
 .vstate{font-size:18px;margin:2px 0 8px}.vstate b{font-weight:600}.vstate.err{color:#ffb4a8}
-.vmic{min-width:170px;min-height:64px;font-size:20px}.vmic.live{background:#ff6b6b;color:#1b0d0d;border-color:transparent;font-weight:600}
+.vmic{min-width:170px;min-height:64px;font-size:20px}.vmic.live,#talk.live{background:#ff6b6b;color:#1b0d0d;border-color:transparent;font-weight:600}
 #vdlg{max-width:min(92vw,600px)}#vdlg h3{margin:0 0 10px;font-weight:500}#vdlg p{margin:8px 0;line-height:1.5}#vdlg .row{margin-top:16px;justify-content:flex-end}
 .vlang{max-width:260px}
 @media (prefers-reduced-motion:reduce){#dock,#toast{transition:none!important}#vind i{animation:none!important}}
+/* ---------- Kiosk PIN gate ---------- */
+#gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--ink);overflow:auto}
+.gbox{width:min(100%,440px);text-align:center}.gbox h2{margin:0 0 8px;font-weight:300;font-size:clamp(22px,4vh,30px)}.gbox p{color:var(--mute);margin:0 0 14px;line-height:1.45}
+#gform input{letter-spacing:.3em;text-align:center;font-size:22px;min-width:0}
+#gerr{color:#ffb4a8;min-height:1.4em;margin:8px 0}
+#gpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 12px}#gpad .btn{min-height:56px;font-size:22px}#gpad .btn:last-child{grid-column:2}
+.gacts{justify-content:center}
+#pinform .f label{width:120px}#pinform input{min-height:52px;width:160px;border-radius:var(--r);border:1px solid var(--line);background:#12162b;padding:0 12px;letter-spacing:.2em}
+#vsec{margin-bottom:6px}

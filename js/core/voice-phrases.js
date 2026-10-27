@@ -1,38 +1,18 @@
-/* VoicePhrases: wake-phrase matching and the wording of voice errors. Pure text, no browser APIs. */
+/* VoicePhrases: the wording of voice problems, each with what to do about it. Pure text, no browser APIs. */
 const VoicePhrases = (() => {
-  // "Hey LUNA" plus the spellings speech engines commonly return for it.
-  const WAKE = /\b(?:hey|hay)[\s,.!-]+(?:luna|loona|lunar|looner|lunah)\b/i;
-
-  /* matchWake("Hey Luna, set a timer.") -> {woke:true, command:'set a timer'} */
-  function matchWake(text) {
-    const s = String(text || '');
-    const m = WAKE.exec(s);
-    if (!m) return { woke: false, command: '' };
-    const command = s.slice(m.index + m[0].length)
-      .replace(/^[\s,.!?:;-]+/, '')
-      .replace(/[\s,.!?]+$/, '');
-    return { woke: true, command };
-  }
-
-  /* Remove a leading wake phrase if there is one: "hey luna what time is it" -> "what time is it" */
-  function stripWake(text) {
-    const m = matchWake(text);
-    return m.woke ? m.command : String(text || '').trim();
-  }
-
   const MESSAGES = {
-    unsupported: 'This browser has no speech recognition (Firefox, for example, does not). Use Chromium or Chrome, or type commands instead.',
-    insecure: 'The microphone is only available on secure pages. Open LUNA at https://… or http://localhost (not a plain http://192.168… address), or start Chromium with its “treat insecure origin as secure” flag for this address.',
-    'not-allowed': 'Microphone permission was denied. Allow the microphone for this site in the browser’s site settings, then try again.',
-    'service-not-allowed': 'The browser blocked speech recognition for this page (browser policy, or the speech service is unavailable).',
+    unsupported: 'This browser has no speech recognition (Firefox, for example, does not). Use Google Chrome (ChromeOS, desktop) or Chromium, or type commands instead.',
+    insecure: 'The microphone only works on a secure page. Open LUNA over https:// with a certificate this device trusts (see “HTTPS on the local network” in README.md), ' +
+      'or at http://localhost on the computer that serves LUNA. A plain http://192.168… address is not secure, so the browser blocks the microphone.',
+    'not-allowed': 'Microphone permission is blocked for this site. Open the site controls next to the address bar (lock or “tune” icon) → Site settings → Microphone → Allow, then reload LUNA and tap Talk again.',
+    'service-not-allowed': 'The browser refused to start speech recognition for this page. This happens on pages that are not secure, when a device or administrator policy blocks it, or when this browser has no speech service.',
     'audio-capture': 'No microphone was found. Plug in a microphone and check it is the system’s selected input.',
-    network: 'The browser’s speech service could not be reached. Cloud speech needs an internet connection, and Chromium on Raspberry Pi OS may not have access to Google’s speech service at all.',
+    network: 'The browser’s speech service could not be reached. Chrome’s speech recognition sends audio to an online service, so it needs an internet connection. Some browsers (for example Chromium on Raspberry Pi OS) cannot reach it at all.',
     'language-not-supported': 'That speech language is not supported by this browser.',
-    'restart-failed': 'Wake-phrase listening stopped after repeated failures.',
     'start-failed': 'The microphone could not be started.',
   };
 
   const explain = (code) => MESSAGES[code] || 'Speech recognition error: ' + code + '.';
 
-  return { matchWake, stripWake, explain };
+  return { explain };
 })();

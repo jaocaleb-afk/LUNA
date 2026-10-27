@@ -2,18 +2,24 @@ const a = require('assert');
 const { test } = require('./harness');
 const { VoicePhrases } = require('./load');
 
-test('wake phrase: accepted spellings and rejected near-misses', () => {
-  const match = VoicePhrases.matchWake;
-  for (const s of ['Hey Luna', 'hey luna', 'Hey, LUNA!', 'hay luna', 'hey loona', 'Hey Luna set a 5 minute timer']) {
-    a.ok(match(s).woke, s);
+test('voice wording: every known problem has its own explanation with a way forward', () => {
+  const codes = ['unsupported', 'insecure', 'not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'language-not-supported', 'start-failed'];
+  const seen = new Set();
+  for (const code of codes) {
+    const msg = VoicePhrases.explain(code);
+    a.ok(msg.length > 20 && !msg.startsWith('Speech recognition error'), code);
+    seen.add(msg);
   }
-  for (const s of ['luna', 'hello luna', 'they lunar eclipse', 'hey', 'heyluna', 'play some music', 'a blue moon']) {
-    a.ok(!match(s).woke, s);
-  }
+  a.strictEqual(seen.size, codes.length, 'no two problems share a message');
+  a.strictEqual(VoicePhrases.explain('odd-code'), 'Speech recognition error: odd-code.');
 });
 
-test('wake phrase: the command after it is extracted and tidied', () => {
-  a.strictEqual(VoicePhrases.matchWake('Hey Luna, set a 5 minute timer.').command, 'set a 5 minute timer');
-  a.strictEqual(VoicePhrases.matchWake('hey luna').command, '');
-  a.strictEqual(VoicePhrases.stripWake('what time is it'), 'what time is it');
+test('voice wording: the insecure-page fix is HTTPS or localhost, not a browser flag', () => {
+  const msg = VoicePhrases.explain('insecure');
+  a.ok(/https:\/\//.test(msg) && /trusts/.test(msg) && /localhost/.test(msg));
+  a.ok(!/flag|unsafely/i.test(msg));
+});
+
+test('voice wording: no wake-phrase API remains', () => {
+  a.deepStrictEqual(Object.keys(VoicePhrases), ['explain']);
 });

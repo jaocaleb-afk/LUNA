@@ -1,9 +1,10 @@
 'use strict';
 /* Assistant: runs a parsed command (typed OR spoken) against the app, and mounts the command box
-   used on the Assistant and Settings screens. Voice (voice-ui.js) calls Assistant.run() with recognised text. */
+   used on the Assistant and Settings screens. Voice (voice-ui.js) calls Assistant.run() with recognised text.
+   Timer commands are answered by TimerReplies (timer-replies.js), which also knows about the Screen Time Timer. */
 const Assistant = (() => {
   const LOG_LIMIT = 5;
-  const EXAMPLES = ['Set a 5 minute timer', 'Pause the timer', 'What time is it?', 'Open settings'];
+  const EXAMPLES = ['Set a 5 minute timer', 'Set a timer for 1 hour and 15 minutes', 'How much time is left?', 'Pause the timer', 'What time is it?', 'Open settings'];
 
   const say = (ok, msg) => ({ ok, msg });
 
@@ -11,16 +12,17 @@ const Assistant = (() => {
     if (!Nav.go(action.screen)) return say(false, 'Unknown screen.');
     if (action.screen === 'backgrounds') BgUI.enter();
     TimerUI.render();
-    return say(true, 'Opened ' + action.screen + '.');
+    return say(true, 'Opened ' + (action.screen === 'screentime' ? 'Screen Time' : action.screen) + '.');
   }
 
   /* One handler per action type produced by Parser.parse(). Each returns {ok, msg}. */
   const HANDLERS = {
-    'timer.set': (a) => TimerEngine.start(a.seconds * 1000),
-    'timer.pause': () => TimerEngine.pause(),
-    'timer.resume': () => TimerEngine.resume(),
-    'timer.cancel': () => TimerEngine.cancel(),
-    'timer.reset': () => TimerEngine.reset(),
+    'timer.set': (a) => TimerReplies.set(a),
+    'timer.status': (a) => TimerReplies.status(a),
+    'timer.pause': (a) => TimerReplies.control(a),
+    'timer.resume': (a) => TimerReplies.control(a),
+    'timer.cancel': (a) => TimerReplies.control(a),
+    'timer.reset': (a) => TimerReplies.control(a),
     'clock.say': () => say(true, 'It is ' + Clock.say() + '.'),
     'nav': openScreen,
   };
@@ -33,10 +35,7 @@ const Assistant = (() => {
     if (!handler) return say(false, 'No handler for that action.');
 
     let result;
-    try { result = handler(parsed.action); } catch (e) { result = say(false, 'That action failed.'); }
-    if (result.ok && parsed.action.type === 'timer.set') {
-      result.msg = 'Timer set for ' + fmt(parsed.action.seconds * 1000) + '.';
-    }
+    try { result = handler(parsed.action); } catch (e) { console.error(e); result = say(false, 'That action failed.'); }
     return result;
   }
 

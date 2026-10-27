@@ -1,26 +1,29 @@
 'use strict';
-/* VoiceUI: connects the voice state machine (core/voice-session.js) to the page.
+/* VoiceUI: connects the push-to-talk state machine (core/voice-session.js) to the page.
 
    Consent model (nothing is opened or sent before the person agrees):
-     1. "Turn voice on"  -> disclosure dialog (audio goes to the browser's cloud speech service) -> consent stored.
-                            The microphone is still NOT opened. It opens when the person taps Talk.
-     2. "Always listen"  -> a second, stronger disclosure (continuous streaming) -> stored separately.
-     3. Turning voice off, or Restore defaults, stops the microphone and deletes both consents.
-   After a reload, always-listening resumes only if consent exists AND the browser already holds microphone
-   permission, so a page load never triggers a surprise permission prompt. */
+     1. "Turn voice on" -> disclosure dialog (audio goes to the browser's cloud speech service) -> consent stored.
+                           The microphone is still NOT opened.
+     2. Talk            -> opens the microphone for ONE command (the browser asks for permission the first time).
+                           Tapping it again while starting/listening stops it.
+     3. Turning voice off, or Restore defaults, stops the microphone and deletes the stored consent.
+   The browser's microphone permission is only READ (navigator.permissions.query), never requested on load,
+   so a page load never opens the microphone or shows a permission prompt.
+
+   Replies: the answer to a voice command is shown in the bubble AND spoken by Speech (speech.js, text-to-speech),
+   if spoken replies are on. Tapping Talk silences any reply first, so LUNA never talks over the person. */
 const VoiceUI = (() => {
   const CONSENT_KEY = 'luna.voice.consent.v1';
   const MAX_LOG = 5;
-  const consent = () => store.get(CONSENT_KEY, {});
   const saveConsent = (c) => store.set(CONSENT_KEY, c);
 
   let voice = null;
   let previousState = 'idle';
   let bubbleTimer = 0;
   let logs = [];
+  let mic = 'unknown';   // browser microphone permission, as last reported
 
   const isOn = () => Settings.get().voiceOn;
-  const wantsWake = () => Settings.get().wakeOn;
 
   /* ---------- speech bubble on the home screen (the recognised command and LUNA's response) ---------- */
   function showBubble(parts, cls, ms) {
@@ -32,24 +35,29 @@ const VoiceUI = (() => {
     clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(() => { bubble.hidden = true; }, ms);
   }
+  const firstSentence = (text) => (String(text).match(/^.*?[.!?](\s|$)/) || [text])[0].trim();
   const quoted = (text) => H('span', { className: 'you', textContent: '“' + text + '”' });
 
   function onVoiceEvent(e) {
     if (e.type === 'state') {
-      if (e.state === 'command' && previousState !== 'command') Sound.chime(); // audible "I'm listening"
+      if (e.state === 'listening' && previousState !== 'listening') Sound.chime(); // audible "I'm listening"
       previousState = e.state;
       render();
     } else if (e.type === 'heard') {
       showBubble([quoted(e.text), e.final ? ' …' : '…'], '', e.final ? 4000 : 9000);
     } else if (e.type === 'command') {
       showBubble([quoted(e.text), ' → ' + e.msg], e.ok ? '' : 'err', 9000);
+      Speech.say(e.msg);
       logs.unshift({ ok: e.ok, text: '“' + e.text + '” → ' + e.msg });
       logs.length = Math.min(logs.length, MAX_LOG);
       render();
     } else if (e.type === 'timeout') {
-      showBubble(['I didn’t catch a command.'], '', 4000);
+      showBubble([e.msg], '', 4000);
+      Speech.say(e.msg);
     } else if (e.type === 'error') {
+      if (e.code === 'not-allowed') mic = 'denied';
       showBubble([e.msg], 'err', 12000);
+      Speech.say(firstSentence(e.msg));
       render();
     }
   }
@@ -76,8 +84,8 @@ const VoiceUI = (() => {
       if (!support.ok) { Toast.show(support.msg, 8000); return render(); }
       askConsent('Turn on voice commands?', [
         'LUNA has no speech recognition of its own; it uses the one built into this browser.',
-        'In Chromium and Chrome, while you are speaking to LUNA, microphone audio is sent to Google’s servers to be converted to text. LUNA does not record or store audio.',
-        'The browser will ask for microphone permission the first time you tap Talk. You can turn voice off at any time.',
+        'In Chrome and Chromium, while you are speaking to LUNA, microphone audio is sent to Google’s servers to be converted to text. LUNA does not record or store audio.',
+        'The microphone only opens when you tap Talk, for one command. The browser will ask for microphone permission the first time. You can turn voice off at any time.',
       ], 'I understand — allow', () => {
         saveConsent({ push: Date.now() });
         Settings.set('voiceOn', true);
@@ -87,38 +95,17 @@ const VoiceUI = (() => {
 
     disableVoice() {
       voice.stop();
+      Speech.stop();
       saveConsent({});
-      Settings.set('wakeOn', false);
       Settings.set('voiceOn', false);
     },
 
-    enableWake() {
-      askConsent('Always listen for “Hey LUNA”? (experimental)', [
-        'This keeps the microphone open and continuously streams ALL audio it hears — not only after you say “Hey LUNA” — to the browser’s cloud speech service (Google, in Chromium). Anything said near the device is sent.',
-        'LUNA throws away text that does not start with “Hey LUNA”, but the audio has already been sent to the service.',
-        'It may not work on a Raspberry Pi, and LUNA will say so if it cannot. Talk (push-to-talk) only listens after you tap it and is the more private choice.',
-      ], 'Allow always-listening', () => {
-        saveConsent({ ...consent(), wake: Date.now() });
-        Settings.set('wakeOn', true);
-        voice.startWake(); // the microphone permission prompt appears now, in response to the person's choice
-      });
-    },
-
-    disableWake() {
-      voice.stop();
-      const c = consent();
-      delete c.wake;
-      saveConsent(c);
-      Settings.set('wakeOn', false);
-    },
-
-    startWake() { voice.startWake(); },
-
+    /* Talk toggles: idle/error -> listen for one command; starting/listening -> stop. */
     talk() {
       const state = voice.getState();
-      if (state === 'command' && !voice.wantsWake()) return voice.stop(); // tapping Stop
-      if (state === 'starting') return;
-      voice.listenOnce();
+      if (state === 'starting' || state === 'listening') return voice.stop();
+      Speech.stop();                     // never talk over the person, and do not let the mic hear LUNA
+      voice.listen();
     },
 
     setLanguage(lang) { Settings.set('voiceLang', lang); },
@@ -126,21 +113,33 @@ const VoiceUI = (() => {
 
   function render() {
     if (!voice) return;
-    VoiceView.render({ voice, on: isOn(), wake: wantsWake(), lang: Settings.get().voiceLang, logs, actions });
+    VoiceView.render({
+      voice, on: isOn(), mic, lang: Settings.get().voiceLang, logs, actions,
+      secure: !!window.isSecureContext, origin: location.origin,
+    });
   }
 
-  /* After a reload: resume always-listening only when consent exists and the mic is already permitted. */
-  function resumeWakeIfPermitted() {
-    if (!(isOn() && wantsWake() && consent().wake && voice.support().ok)) return;
+  /* Read (never request) the microphone permission, and follow changes, so a blocked microphone is explained up front. */
+  function watchMicPermission() {
+    if (!window.isSecureContext || !navigator.permissions || !navigator.permissions.query) return;
     try {
-      navigator.permissions.query({ name: 'microphone' }).then(
-        (p) => { if (p.state === 'granted') voice.startWake(); else render(); },
-        () => render());
-    } catch (e) { render(); }
+      navigator.permissions.query({ name: 'microphone' }).then((p) => {
+        mic = p.state;
+        p.onchange = () => { mic = p.state; render(); };
+        render();
+      }, () => { /* this browser cannot report it */ });
+    } catch (e) { /* unsupported permission name */ }
+  }
+
+  /* Data written by older versions that had an always-listening mode. */
+  function dropLegacyWakeData() {
+    const c = store.get(CONSENT_KEY, {});
+    if (c && 'wake' in c) { delete c.wake; saveConsent(c); }
   }
 
   return {
     init() {
+      dropLegacyWakeData();
       voice = VoiceCore.createVoice({
         ctor: window.SpeechRecognition || window.webkitSpeechRecognition || null,
         secure: !!window.isSecureContext,
@@ -150,21 +149,15 @@ const VoiceUI = (() => {
       });
       $('#talk').onclick = actions.talk;
       render();
-      resumeWakeIfPermitted();
+      watchMicPermission();
     },
 
     /* Called when a voice-related setting changes (including "Restore defaults"). */
-    onSetting(key) {
+    onSetting() {
       if (!voice) return;
       if (!isOn()) {
         voice.stop();
         saveConsent({});
-        if (wantsWake()) Settings.set('wakeOn', false);
-      } else if (key === 'voiceLang' && voice.wantsWake()) {
-        voice.stop();
-        voice.startWake();
-      } else if (!wantsWake() && voice.wantsWake()) {
-        voice.stop();
       }
       render();
     },

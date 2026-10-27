@@ -32,6 +32,7 @@ document.addEventListener('visibilitychange', () => {
 
 Library.load();
 Rules.load();
+PinStore.load();
 
 safe('settings', SettingsUI.init);
 safe('clock', () => Clock.start());
@@ -41,5 +42,7 @@ safe('assistant', () => $$('[data-cmd]').forEach(Assistant.mount));
 safe('schedules', ScheduleUI.init);
 safe('idle', Idle.init);
 safe('voice', VoiceUI.init);
+safe('pin', PinUI.init);
+safe('kiosk', Kiosk.init);
 safe('schedule-runner', ScheduleRunner.start);
 safe('route', routeFromHash);

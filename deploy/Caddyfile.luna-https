@@ -1,0 +1,24 @@
+# LUNA over HTTPS on the local network: an EXTRA site, added next to what is already running.
+#
+#   https://192.168.1.97:8443  ->  Caddy (TLS, certificate from Caddy's own local CA)  ->  http://127.0.0.1:8082 (LUNA-new, unchanged)
+#
+# It does not touch port 8081 (the old LUNA), port 8082 (still served as before), JaoDrive, or ports 80/443.
+# If your Caddyfile already has a global options block { ... } at the top, put the two options below into
+# that block instead of adding a second one (Caddy allows only one, and it must come first).
+# Change 192.168.1.97 if the Pi's address is different, and 8443 if that port is already in use.
+
+{
+	# Do not bind port 80 for HTTP->HTTPS redirects (something else may be using it).
+	auto_https disable_redirects
+	# Do not try to add Caddy's CA to the Pi's own system trust store (we trust it only where needed).
+	skip_install_trust
+}
+
+https://192.168.1.97:8443 {
+	# Certificate for the IP address, signed by Caddy's local CA (renewed automatically).
+	# Devices must trust that CA's root certificate once: see README.md, "HTTPS on the local network".
+	tls internal
+
+	# Forward to the existing LUNA-new server on port 8082. Nothing is copied or moved.
+	reverse_proxy 127.0.0.1:8082
+}

@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const CORE_FILES = ['parser', 'timer-engine', 'schedule-time', 'schedule', 'scheduler', 'idle', 'voice-phrases', 'voice-session'];
-const NAMES = ['Parser', 'TimerEngine', 'createTimerEngine', 'ScheduleTime', 'Schedule', 'createScheduler', 'createIdle', 'VoicePhrases', 'VoiceCore'];
+const CORE_FILES = ['parser', 'timer-engine', 'schedule-time', 'schedule', 'scheduler', 'idle', 'voice-phrases', 'voice-session', 'pin', 'kiosk-gate'];
+const NAMES = ['Parser', 'TimerEngine', 'createTimerEngine', 'ScheduleTime', 'Schedule', 'createScheduler', 'createIdle', 'VoicePhrases', 'VoiceCore', 'Pin', 'createKioskGate'];
 
 for (const f of CORE_FILES) {
   const file = path.join(__dirname, '..', '..', 'js', 'core', f + '.js');

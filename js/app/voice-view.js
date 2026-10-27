@@ -4,34 +4,40 @@
 
    Three places show voice:
      #vind    home-screen indicator (top right). Only says "Listening" when audio is really flowing.
-     #vcard   Assistant screen: status, Talk button, recent commands
-     #vset    Settings screen: turn voice on/off, always-listen toggle, language, privacy notes */
+     #vcard   Assistant screen: status, Talk/Stop button, recent commands
+     #vset    Settings screen: page security, turn voice on/off, language, privacy notes */
 const VoiceView = (() => {
-  function indicatorFor(state, voice) {
-    switch (state) {
-      case 'command': return { cls: 'cmd', text: 'Listening…' };
-      case 'wake': return { cls: 'wake', text: 'Hey LUNA' + (voice.isVerified() ? '' : ' (unverified)') };
-      case 'starting': return { cls: '', text: 'Starting mic…' };
-      case 'error': return { cls: 'err', text: 'Voice unavailable' };
-      default: return { cls: 'err', text: 'Hey LUNA is not listening' };
-    }
-  }
+  const INDICATOR = {
+    listening: { cls: 'live', text: 'Listening…' },
+    starting: { cls: '', text: 'Starting mic…' },
+    error: { cls: 'err', text: 'Voice unavailable' },
+  };
+
+  const isActive = (state) => state === 'starting' || state === 'listening';
+  const talkLabel = (state) => state === 'listening' ? '■ Stop' : state === 'starting' ? '■ Cancel' : '🎤 Talk';
 
   function renderHomeIndicator(ctx) {
-    const { voice, on, wake } = ctx;
-    const state = voice.getState();
+    const state = ctx.voice.getState();
     const el = $('#vind');
-    el.hidden = !(on && (state !== 'idle' || wake));
+    const info = ctx.on && INDICATOR[state];
+    el.hidden = !info;
     el.className = '';
     el.innerHTML = '';
-    if (el.hidden) return;
-    const info = indicatorFor(state, voice);
+    if (!info) return;
     el.className = info.cls;
     el.append(H('i'), document.createTextNode(info.text));
   }
 
+  function renderTalkButton(ctx) {
+    const state = ctx.voice.getState();
+    const talk = $('#talk');
+    talk.hidden = !ctx.on;
+    setText(talk, talkLabel(state));
+    talk.classList.toggle('live', isActive(state));
+  }
+
   function renderAssistantCard(ctx, status) {
-    const { voice, on, wake, logs, actions } = ctx;
+    const { voice, on, logs, actions } = ctx;
     const state = voice.getState();
     const card = $('#vcard');
     card.innerHTML = '';
@@ -42,11 +48,10 @@ const VoiceView = (() => {
 
     const row = H('div', { className: 'row' });
     if (on) {
-      row.append(H('button', { id: 'vtalk', className: 'btn vmic' + (state === 'command' ? ' live' : ''), textContent: state === 'command' ? '■ Stop' : '🎤 Talk', onclick: actions.talk }));
+      row.append(H('button', { id: 'vtalk', className: 'btn vmic' + (isActive(state) ? ' live' : ''), textContent: talkLabel(state), onclick: actions.talk }));
     } else {
       row.append(H('button', { className: 'btn pri', textContent: 'Set up voice…', onclick: () => Nav.go('settings') }));
     }
-    if (on && wake && state === 'idle') row.append(H('button', { className: 'btn', textContent: 'Start listening', onclick: actions.startWake }));
     card.append(row);
 
     if (logs.length) {
@@ -56,12 +61,13 @@ const VoiceView = (() => {
   }
 
   function renderSettingsCard(ctx, status) {
-    const { voice, on, wake, lang, actions } = ctx;
-    const state = voice.getState();
+    const { voice, on, lang, actions, secure, origin } = ctx;
     const card = $('#vset');
+    const page = VoiceText.security(secure, origin);
     card.innerHTML = '';
     card.append(
-      H('h3', { textContent: 'Voice & “Hey LUNA”' }),
+      H('h3', { textContent: 'Voice commands (push-to-talk)' }),
+      H('div', { id: 'vsec', className: 'mut' + (page.error ? ' warn' : ''), textContent: page.text }),
       H('div', { className: 'vstate' + (status.error ? ' err' : ''), textContent: status.text }),
     );
 
@@ -69,12 +75,6 @@ const VoiceView = (() => {
     row.append(on
       ? H('button', { className: 'btn', id: 'vtoggle', textContent: 'Turn voice off', onclick: actions.disableVoice })
       : H('button', { className: 'btn pri', id: 'vtoggle', textContent: 'Turn voice on…', onclick: actions.enableVoice, disabled: !voice.support().ok }));
-    row.append(H('button', {
-      className: 'btn' + (wake ? ' sel' : ''), id: 'wtoggle', disabled: !on,
-      textContent: 'Always listen for “Hey LUNA”: ' + (wake ? 'On' : 'Off'),
-      onclick: wake ? actions.disableWake : actions.enableWake,
-    }, { 'aria-pressed': String(wake) }));
-    if (on && wake && state === 'idle') row.append(H('button', { className: 'btn', textContent: 'Start listening', onclick: actions.startWake }));
     card.append(row);
 
     const select = H('select', { className: 'vlang', id: 'vlang', onchange: (e) => actions.setLanguage(e.target.value) }, { 'aria-label': 'Speech language' },
@@ -82,14 +82,13 @@ const VoiceView = (() => {
     card.append(
       H('div', { className: 'f', style: 'margin:12px 0 0' }, null, H('label', { textContent: 'Language', style: 'width:90px' }), select),
       H('div', { className: 'mut', style: 'margin-top:10px', textContent: VoiceText.PRIVACY }),
-      H('div', { className: 'mut', style: 'margin-top:8px', textContent: VoiceText.WAKE_LIMITS }),
     );
   }
 
-  /* ctx = {voice, on, wake, lang, logs:[{ok,text}], actions} */
+  /* ctx = {voice, on, mic, lang, secure, origin, logs:[{ok,text}], actions} */
   function render(ctx) {
-    const status = VoiceText.status(ctx.voice, { on: ctx.on, wake: ctx.wake });
-    $('#talk').hidden = !ctx.on;
+    const status = VoiceText.status(ctx.voice, { on: ctx.on, mic: ctx.mic });
+    renderTalkButton(ctx);
     renderHomeIndicator(ctx);
     renderAssistantCard(ctx, status);
     renderSettingsCard(ctx, status);

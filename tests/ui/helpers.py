@@ -1,8 +1,10 @@
 """Shared helpers for the browser (Playwright) tests.
 
-Targets:  python3 tests/run_ui_tests.py                       (opens ../index.html from disk)
-          LUNA_URL=http://192.168.1.97:8082 python3 tests/run_ui_tests.py   (a running server)
+Targets:  python3 tests/run_ui_tests.py                       (serves the project on a throwaway local port)
+          LUNA_URL=https://192.168.1.97:8443/index.html python3 tests/run_ui_tests.py   (a running server)
 Note: voice tests use a MOCK SpeechRecognition. They test LUNA's logic, not a real microphone.
+      Fullscreen tests use the real Fullscreen API of headless Chromium, but a script stands in for the browser's own
+      exit control (Esc / "exit fullscreen" button), which automation cannot press.
 """
 import json
 import os
@@ -73,6 +75,10 @@ MOCK_SPEECH = r"""
 NO_SPEECH = ("Object.defineProperty(window,'SpeechRecognition',{value:undefined,configurable:true});"
              "Object.defineProperty(window,'webkitSpeechRecognition',{value:undefined,configurable:true});")
 INSECURE = "Object.defineProperty(window,'isSecureContext',{value:false,configurable:true});"
+# On a real insecure page the browser also hides crypto.subtle; this reproduces that (used by the PIN tests).
+NO_CRYPTO = "Object.defineProperty(window.crypto,'subtle',{value:undefined,configurable:true});"
+NO_FULLSCREEN = ("Object.defineProperty(document,'fullscreenEnabled',{value:false,configurable:true});"
+                 "Element.prototype.requestFullscreen=undefined;")
 
 
 def open_page(browser, run, *, viewport=(1024, 600), settings=None, storage=None, clock=None,

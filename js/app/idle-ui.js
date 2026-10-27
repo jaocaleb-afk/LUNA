@@ -35,7 +35,7 @@ const Idle = (() => {
     onActive() { document.body.classList.remove('idle'); },
   });
 
-  const modalOpen = () => !!document.querySelector('dialog[open]') || $('#alarm').classList.contains('on');
+  const modalOpen = () => !!document.querySelector('dialog[open]') || $('#alarm').classList.contains('on') || !$('#gate').hidden;
 
   function onUserEvent(e) {
     // Ignore tiny mouse movements so a vibrating table or jittery mouse does not keep the controls up.
@@ -48,7 +48,7 @@ const Idle = (() => {
 
     const wasIdle = countdown.isIdle();
     const isPress = e.type === 'pointerdown' || e.type === 'touchstart';
-    const onModal = e.target.closest && e.target.closest('#alarm, dialog');
+    const onModal = e.target.closest && e.target.closest('#alarm, dialog, #gate');
 
     // The tap that REVEALS the controls must not also press whatever button appears under the finger.
     if (wasIdle && isPress && !onModal) swallowClicksUntil = performance.now() + SWALLOW_MS;

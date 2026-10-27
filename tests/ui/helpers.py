@@ -2,7 +2,8 @@
 
 Targets:  python3 tests/run_ui_tests.py                       (serves the project on a throwaway local port)
           LUNA_URL=https://192.168.1.97:8443/index.html python3 tests/run_ui_tests.py   (a running server)
-Note: voice tests use a MOCK SpeechRecognition. They test LUNA's logic, not a real microphone.
+Note: voice tests use a MOCK SpeechRecognition and a MOCK speechSynthesis. They test LUNA's logic,
+      not a real microphone, speech service or speaker.
       Fullscreen tests use the real Fullscreen API of headless Chromium, but a script stands in for the browser's own
       exit control (Esc / "exit fullscreen" button), which automation cannot press.
 """
@@ -71,6 +72,27 @@ MOCK_SPEECH = r"""
   try { Object.defineProperty(navigator.permissions, 'query', { value: async () => ({ state: window.__perm }) }); } catch (e) {}
 })();
 """
+
+# A fake speechSynthesis that records what LUNA says and keeps a real queue (so a backlog would show).
+# window.__voices can be set by an earlier init script to change the voice list.
+MOCK_SYNTH = r"""
+(() => {
+  window.__spoken = []; window.__queue = []; window.__cancels = 0;
+  const voices = window.__voices || [{ name: 'Test English', lang: 'en-US', default: true, localService: true },
+                                      { name: 'Zarvox', lang: 'en-US', default: false, localService: true }];
+  function Utterance(text) { this.text = text; }
+  const synth = {
+    getVoices: () => voices,
+    speak(u) { window.__queue.push(u); window.__spoken.push(u.text); },
+    cancel() { window.__cancels++; window.__queue = []; },
+    addEventListener() {},
+  };
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
+})();
+"""
+NO_SYNTH = ("Object.defineProperty(window,'speechSynthesis',{value:undefined,configurable:true});"
+            "Object.defineProperty(window,'SpeechSynthesisUtterance',{value:undefined,configurable:true});")
 
 NO_SPEECH = ("Object.defineProperty(window,'SpeechRecognition',{value:undefined,configurable:true});"
              "Object.defineProperty(window,'webkitSpeechRecognition',{value:undefined,configurable:true});")

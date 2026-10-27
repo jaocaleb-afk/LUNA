@@ -10,7 +10,7 @@
    - Real enforcement needs the browser's/device's kiosk mode (ChromeOS kiosk policies, or Chromium --kiosk). */
 const Kiosk = (() => {
   const ACTIVE_KEY = 'luna.kiosk.v1';
-  const COVERED = '.screen, #alarm, #toast';   // made inert while the gate is up
+  const COVERED = '.screen, #alarm, #stalert, #toast';   // made inert while the gate is up
   const root = document.documentElement;
   const supported = !!(document.fullscreenEnabled && root.requestFullscreen && document.exitFullscreen);
 

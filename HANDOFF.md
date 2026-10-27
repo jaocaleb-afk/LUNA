@@ -15,10 +15,16 @@ Second session: the "Hey LUNA" wake phrase and always-listening mode were **remo
 cleaned up on load), HTTPS-on-the-LAN instructions were added (`deploy/Caddyfile.luna-https`, README "HTTPS on the local network"),
 and a PIN-protected fullscreen kiosk mode was added (`js/core/pin.js`, `js/core/kiosk-gate.js`, `js/app/pin-*.js`, `js/app/kiosk.js`).
 
+Third session: **spoken replies** (text-to-speech for answers to voice commands: `js/core/speech-output.js`, `js/app/speech.js`),
+a **much more flexible command parser** (`js/core/duration-parser.js` reads "3 hours, 2 minutes and 19 seconds", number
+words, halves; `js/core/parser.js` now works by intent and adds "how much time is left?"; `js/app/timer-replies.js`), and the
+**Screen Time Timer** (`js/core/screen-time-*.js`, `js/app/screen-time-*.js`, `css/screen-time.css`, full write-up in `docs/screen-time.md`).
+
 ## State
 
-- Unit tests: `node tests/run-core-tests.js` -> 80/80.
-- Browser tests: `python3 tests/run_ui_tests.py` -> 323/323, zero console errors, stable over 3 consecutive runs (Playwright + Chromium, desktop Linux),
+- Unit tests: `node tests/run-core-tests.js` -> 136/136.
+- Browser tests: `python3 tests/run_ui_tests.py` -> 411/411 (third session), zero console errors (Playwright + Chromium, desktop Linux).
+  Second session: 323/323, stable over 3 consecutive runs,
   and 323/323 against a real Caddy HTTPS server (`LUNA_URL=https://…:8443/index.html`) in the sandbox.
 - Old `core.js`/`app.js` were deleted. The original test files were replaced by `tests/core/*` and `tests/ui/*` (the original UI checks live on in `tests/ui/test_legacy.py`).
 - The project is in the GitHub repo `jaocaleb-afk/LUNA`. It still needs to be copied to `/home/calebj/LUNA-new` on the Pi (check before overwriting anything).
@@ -34,6 +40,11 @@ and a PIN-protected fullscreen kiosk mode was added (`js/core/pin.js`, `js/core/
 3. **Touch on the real screen.** The "reveal tap must not press the button underneath" logic (`js/app/idle-ui.js`, `SWALLOW_MS = 700`) was only tested with emulated touch.
 4. **Fullscreen + PIN on real browsers.** Tests use headless Chromium's real Fullscreen API, but a script stands in for the browser's own Esc / exit control. Check Esc, the browser control, reload and the touch keypad by hand (README checklist).
 5. **A real multi-day run** of schedules on the Pi (sleep/wake, NTP clock correction after boot). Logic is unit-tested; the real device is not.
+6. **Spoken replies on real devices.** Tests use a mock `speechSynthesis`. Raspberry Pi OS Chromium needs `speech-dispatcher` + a voice
+   (`espeak-ng`) or it is silent; ChromeOS has voices built in. Check the voice named in Settings -> Spoken replies and that Test voice is audible.
+7. **Screen Time on the Pi.** The alarm uses WebAudio (headless Chromium reports it "playing"; nothing was heard). Check it is audible and
+   annoying enough, that it starts after a reload during the alert once the screen is tapped (autoplay policy), and a real
+   overnight run (midnight reset, Pi without RTC booting before NTP -> expect "Blocked" until the clock is right).
 
 ## Architecture in one minute
 
@@ -42,7 +53,8 @@ and a PIN-protected fullscreen kiosk mode was added (`js/core/pin.js`, `js/core/
 - Core objects: `Parser`, `createTimerEngine`/`TimerEngine`, `ScheduleTime`, `Schedule`, `createScheduler`, `createIdle`, `VoicePhrases`, `VoiceCore`, `Pin`, `createKioskGate`.
   Page objects: `Settings`, `Nav`, `Clock`, `TimerUI`, `Rules`, `ScheduleRunner`, `ScheduleUI`, `ScheduleEditor`, `Idle`, `VoiceUI`, `Assistant`, `PinStore`, `PinUI`, `Kiosk`, etc.
 - `main.js` boots each module inside `safe(name, fn)` so one failing module is logged and the rest keep working.
-- localStorage keys: `luna.settings.v1`, `luna.bg.v2`, `luna.rules.v1`, `luna.voice.consent.v1`, `luna.pin.v1` (salted PBKDF2 hash only), `luna.kiosk.v1`. Everything read back is validated (`Settings` validators, `Schedule.clean`, `BgModel.clean`).
+- localStorage keys: `luna.settings.v1` (now also `speakOn`), `luna.bg.v2`, `luna.rules.v1`, `luna.voice.consent.v1`, `luna.pin.v1` (salted PBKDF2 hash only), `luna.kiosk.v1`,
+  `luna.screentime.v1`. Everything read back is validated (`Settings` validators, `Schedule.clean`, `BgModel.clean`, `ScreenTimeRecord.clean`).
 
 ## Behaviour decisions (deliberate; change only if the owner asks)
 
@@ -56,7 +68,17 @@ and a PIN-protected fullscreen kiosk mode was added (`js/core/pin.js`, `js/core/
   - Max 20 rules. Only action: `timer.start`.
 - Voice: push-to-talk only, one command per tap, no wake phrase. The consent dialog comes first; the mic is never opened before Talk. "Listening" is only shown after the recogniser reports audio started. A reload never opens the mic.
 - Kiosk: LUNA's Exit button asks for the PIN; any other fullscreen exit (or a reload in kiosk mode) shows a blocking PIN screen with "Return to fullscreen". No PIN set = no protection, and the UI says so. 5 wrong PINs -> 30 s pause, growing to 5 min, never permanent. Restore defaults keeps the PIN.
-- A running timer is not persisted across page reload (also true of the original). Rules/settings/backgrounds are.
+- A running timer is not persisted across page reload (also true of the original). Rules/settings/backgrounds are. The Screen Time session IS persisted.
+- Spoken replies: only for voice commands (not typed ones, not timer ticks). Newest reply cancels the previous one. Talk silences LUNA first.
+  Same sentence on screen and aloud. Durations are read back in words ("3 hours, 2 minutes, and 19 seconds").
+- Parser: refuses rather than guesses (number without unit, repeated unit, range, "1:30", vague, negative, non-whole, >24 h).
+  "LUNA, ..." and "please" are stripped (this is NOT a wake phrase). Control commands = one verb + filler words only.
+- Screen Time (see `docs/screen-time.md`): 20-min sessions; weekdays 4/day + 10-min gap after each END; weekends no cap,
+  cooldown after a back-to-back pair ("back-to-back" = started < 10 min after the previous one ENDED; the brief's literal
+  "after it started" is impossible, its example matches this). Boundary (exactly 10:00) is allowed and not back-to-back.
+  Gap applies across midnight; rules of the CURRENT day apply. No stop/pause/cancel exists anywhere (not even in the core API).
+  Corrupt data -> lock until next midnight. Save failure -> session not started. Alarm ignores the Timer sound setting.
+  Voice/typed "cancel that timer" with only Screen Time running -> refused ("This timer cannot be cancelled.").
 
 ## Gotchas learned the hard way
 
@@ -77,10 +99,18 @@ open the mic on consent; skip the always-listen consent dialog; offset the clock
 Second session (22 more, all caught), e.g.: browser exit no longer locks; reload escapes the lock; app exit skips the PIN; verify accepts any PIN;
 confirmation unchecked; no limiter; continuous listening; insecure origin allowed; plaintext PIN stored; change/remove without current PIN;
 unsaved PIN reported as saved; app not inert behind the gate. Restore the file afterwards and re-run.
+Third session (37, all caught after adding two tests): parser accepts a repeated unit / a number without a unit / 48 h;
+durations read back without seconds; no "time left" intent; control verbs accept extra words; speech backlog (no cancel), novelty voices,
+off switch ignored, Talk does not silence LUNA, turning replies off does not stop speech, reply not spoken; Screen Time gap measured from
+the start; 5 weekday sessions; boundary start counted as back-to-back; weekday cap on weekends; alert does not block; rolling 24 h instead
+of midnight; no weekend pair rule; clock-back ignored; corrupt data -> fresh allowance; session length / extra fields not validated;
+reload restarts at 20:00; session starts although not saved; clock set back lengthens the session; sleep not caught up; Dismiss refunds;
+countdown by counting ticks; Start always shown; Dismiss does not stop the alarm; alarm loops stack; alarm obeys Timer sound;
+Escape dismisses; "cancel that timer" ignores Screen Time; confirmation as M:SS; Restore defaults wipes Screen Time.
 
 ## Suggested next steps
 
-1. Unpack to `/home/calebj/LUNA-new`, serve on 8082, run both test suites on the Pi's own machine or against `LUNA_URL`.
+1. Copy to `/home/calebj/LUNA-new`, serve on 8082, run both test suites on the Pi's own machine or against `LUNA_URL`.
 2. Do the real-device checks above; fix whatever the Pi shows (resolution, touch, voice).
 3. Do the Caddy HTTPS steps (README) and the ChromeOS voice + fullscreen checks.
 4. Small known polish items (none block use):

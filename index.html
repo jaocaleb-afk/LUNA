@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LUNA</title><link rel="stylesheet" href="css/luna.css"></head><body>
+<title>LUNA</title><link rel="stylesheet" href="css/luna.css"><link rel="stylesheet" href="css/screen-time.css"></head><body>
 <div id="bgl"></div><div id="scrim"></div>
 
 <main id="home" class="screen on" data-screen="home">
@@ -11,11 +11,13 @@
  <!-- Always visible (never hidden by the idle timeout): running-timer readout and the last voice command/response. -->
  <div id="topinfo">
   <div id="tbadge" role="timer" hidden><span id="tbt"></span><span id="tbl"></span></div>
+  <div id="stbadge" role="timer" aria-label="Screen Time remaining" hidden><span id="stbt"></span><span id="stbl">Screen Time</span></div>
   <div id="vbubble" role="status" aria-live="polite" hidden></div>
  </div>
  <div id="vind" role="status" hidden></div>
  <nav id="dock" aria-label="Main controls">
   <button class="btn" data-go="timer">Timer</button>
+  <button class="btn" data-go="screentime">Screen Time</button>
   <button class="btn" data-go="schedules">Schedules</button>
   <button class="btn" data-go="assistant">Assistant</button>
   <button class="btn" data-go="backgrounds">Backgrounds</button>
@@ -32,6 +34,18 @@
  <div class="row ctr" id="tin"><input id="tm" type="number" inputmode="numeric" min="0" max="1439" value="0" aria-label="Minutes"><span>min</span><input id="ts" type="number" inputmode="numeric" min="0" max="59" value="0" aria-label="Seconds"><span>sec</span></div>
  <div class="row ctr" id="tctl"></div>
  <div class="card mut" id="tnext"></div>
+</section>
+
+<section class="screen" data-screen="screentime">
+ <div class="top"><button class="btn" data-go="home">Home</button><h2>Screen Time Timer</h2></div>
+ <!-- Drawn by js/app/screen-time-ui.js. Only two buttons ever: Start (when allowed) and Dismiss (on the alert). -->
+ <div id="stmode"></div>
+ <div id="stst" role="status"></div>
+ <div id="std" role="timer" aria-live="off">20:00</div><div id="stdl"></div>
+ <div id="stused"></div>
+ <div id="stwhy"></div>
+ <div class="row ctr"><button class="btn pri" id="ststart" hidden>Start 20-minute session</button></div>
+ <div class="card mut" id="strules"></div>
 </section>
 
 <section class="screen" data-screen="schedules">
@@ -63,6 +77,7 @@
  <div class="top"><button class="btn" data-go="home">Home</button><h2>Settings</h2></div>
  <div id="sets"></div>
  <div class="card" id="vset"></div>
+ <div class="card" id="sset"></div>
  <div class="card" id="kset"></div>
  <div class="card" id="pinset"></div>
  <div class="card"><h3>Test a command</h3><div data-cmd></div></div>
@@ -70,6 +85,7 @@
 </section>
 
 <div id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alt"><div id="alt">Time’s up</div><div id="als"></div><button class="btn pri" id="dis">Dismiss</button></div>
+<div id="stalert" role="alertdialog" aria-modal="true" aria-labelledby="stat" aria-describedby="stad" hidden><div id="stat">Screen Time is over</div><div id="stad"></div><div id="stsound" class="warn" hidden></div><button class="btn pri" id="stdismiss">Dismiss</button></div>
 <dialog id="dlg"><p id="dlgt"></p><div class="row"><button class="btn" id="no">Keep</button><button class="btn pri" id="yes">Confirm</button></div></dialog>
 <dialog id="vdlg" aria-labelledby="vdt"><h3 id="vdt"></h3><div id="vdb"></div><div class="row"><button class="btn" id="vno">Cancel</button><button class="btn pri" id="vyes">I understand — allow</button></div></dialog>
 <div id="toast" role="status"></div>
@@ -83,6 +99,7 @@
   <div class="row gacts"><button class="btn" id="greturn" type="button">Return to fullscreen</button><button class="btn" id="gcancel" type="button">Cancel — stay in fullscreen</button></div>
  </div>
 </div>
+<script src="js/core/duration-parser.js"></script>
 <script src="js/core/parser.js"></script>
 <script src="js/core/timer-engine.js"></script>
 <script src="js/core/schedule-time.js"></script>
@@ -93,6 +110,10 @@
 <script src="js/core/voice-session.js"></script>
 <script src="js/core/pin.js"></script>
 <script src="js/core/kiosk-gate.js"></script>
+<script src="js/core/speech-output.js"></script>
+<script src="js/core/screen-time-policy.js"></script>
+<script src="js/core/screen-time-storage.js"></script>
+<script src="js/core/screen-time-timer.js"></script>
 <script src="js/app/util.js"></script>
 <script src="js/app/settings.js"></script>
 <script src="js/app/nav.js"></script>
@@ -102,6 +123,7 @@
 <script src="js/app/background-ui.js"></script>
 <script src="js/app/sound.js"></script>
 <script src="js/app/timer-ui.js"></script>
+<script src="js/app/timer-replies.js"></script>
 <script src="js/app/assistant.js"></script>
 <script src="js/app/settings-ui.js"></script>
 <script src="js/app/rules-store.js"></script>
@@ -112,7 +134,12 @@
 <script src="js/app/idle-ui.js"></script>
 <script src="js/app/voice-text.js"></script>
 <script src="js/app/voice-view.js"></script>
+<script src="js/app/speech.js"></script>
 <script src="js/app/voice-ui.js"></script>
+<script src="js/app/screen-time-store.js"></script>
+<script src="js/app/screen-time-alarm.js"></script>
+<script src="js/app/screen-time-text.js"></script>
+<script src="js/app/screen-time-ui.js"></script>
 <script src="js/app/pin-store.js"></script>
 <script src="js/app/pin-ui.js"></script>
 <script src="js/app/kiosk.js"></script>

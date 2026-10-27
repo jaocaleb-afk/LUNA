@@ -1,6 +1,6 @@
 'use strict';
 /* SettingsUI: the Settings screen: one card per setting (time format, time zone, animation, timer sound,
-   idle timeout). The voice card is drawn by voice-view.js, the kiosk and PIN cards by kiosk.js and pin-ui.js. Also reacts to setting changes elsewhere in the app. */
+   idle timeout). The voice card is drawn by voice-view.js, the spoken-replies card by speech.js, the kiosk and PIN cards by kiosk.js and pin-ui.js. Also reacts to setting changes elsewhere in the app. */
 const SettingsUI = (() => {
   const IDLE_NOTE = 'Buttons fade away after this much inactivity, leaving only the clock. Tap or press any key to bring them back. ' +
     'Other screens return to the clock after at least 30 seconds.';
@@ -59,6 +59,8 @@ const SettingsUI = (() => {
     if (all || key === 'motion') Bg.showActive();
     if (all || key === 'idleSec') Idle.reconfigure();
     if (all || ['voiceOn', 'voiceLang'].includes(key)) VoiceUI.onSetting(key);
+    if (all || ['speakOn', 'voiceLang'].includes(key)) Speech.onSetting(key);
+    if (all || key === 'timeFormat') ScreenTimeUI.refresh();
   }
 
   function restoreDefaults() {
@@ -74,7 +76,7 @@ const SettingsUI = (() => {
       render();
       Settings.on(applyChange);
       $('#reset').onclick = () => confirmDlg(
-        'Restore all settings and backgrounds to their defaults? Your saved backgrounds will be deleted. Schedules and the exit PIN are kept.',
+        'Restore all settings and backgrounds to their defaults? Your saved backgrounds will be deleted. Schedules, Screen Time history and the exit PIN are kept.',
         restoreDefaults);
     },
   };

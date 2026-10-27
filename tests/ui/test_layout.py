@@ -27,7 +27,7 @@ def run(browser, r):
     pg.evaluate("TimerEngine.start(60000,{label:'Morning timer',source:'rule'})"); pg.wait_for_timeout(150)
     r.check('timer readout appears without moving the clock', pg.is_visible('#tbadge') and rects_equal(before, pg.evaluate(CLOCK_RECT)))
     pg.evaluate("document.getElementById('vind').hidden=false;document.getElementById('vind').textContent='Listening…';"
-                "const b=document.getElementById('vbubble');b.hidden=false;b.textContent='“set a 5 minute timer” → Timer set for 5:00.'")
+                "const b=document.getElementById('vbubble');b.hidden=false;b.textContent='“set a 5 minute timer” → Starting a timer for 5 minutes.'")
     pg.wait_for_timeout(100)
     r.check('voice indicator and bubble appear without moving the clock', rects_equal(before, pg.evaluate(CLOCK_RECT)))
     pg.evaluate("document.getElementById('vind').hidden=true;document.getElementById('vbubble').hidden=true;TimerEngine.cancel()")

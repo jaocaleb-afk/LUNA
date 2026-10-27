@@ -8,7 +8,10 @@
                            Tapping it again while starting/listening stops it.
      3. Turning voice off, or Restore defaults, stops the microphone and deletes the stored consent.
    The browser's microphone permission is only READ (navigator.permissions.query), never requested on load,
-   so a page load never opens the microphone or shows a permission prompt. */
+   so a page load never opens the microphone or shows a permission prompt.
+
+   Replies: the answer to a voice command is shown in the bubble AND spoken by Speech (speech.js, text-to-speech),
+   if spoken replies are on. Tapping Talk silences any reply first, so LUNA never talks over the person. */
 const VoiceUI = (() => {
   const CONSENT_KEY = 'luna.voice.consent.v1';
   const MAX_LOG = 5;
@@ -32,6 +35,7 @@ const VoiceUI = (() => {
     clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(() => { bubble.hidden = true; }, ms);
   }
+  const firstSentence = (text) => (String(text).match(/^.*?[.!?](\s|$)/) || [text])[0].trim();
   const quoted = (text) => H('span', { className: 'you', textContent: '“' + text + '”' });
 
   function onVoiceEvent(e) {
@@ -43,14 +47,17 @@ const VoiceUI = (() => {
       showBubble([quoted(e.text), e.final ? ' …' : '…'], '', e.final ? 4000 : 9000);
     } else if (e.type === 'command') {
       showBubble([quoted(e.text), ' → ' + e.msg], e.ok ? '' : 'err', 9000);
+      Speech.say(e.msg);
       logs.unshift({ ok: e.ok, text: '“' + e.text + '” → ' + e.msg });
       logs.length = Math.min(logs.length, MAX_LOG);
       render();
     } else if (e.type === 'timeout') {
       showBubble([e.msg], '', 4000);
+      Speech.say(e.msg);
     } else if (e.type === 'error') {
       if (e.code === 'not-allowed') mic = 'denied';
       showBubble([e.msg], 'err', 12000);
+      Speech.say(firstSentence(e.msg));
       render();
     }
   }
@@ -88,6 +95,7 @@ const VoiceUI = (() => {
 
     disableVoice() {
       voice.stop();
+      Speech.stop();
       saveConsent({});
       Settings.set('voiceOn', false);
     },
@@ -96,6 +104,7 @@ const VoiceUI = (() => {
     talk() {
       const state = voice.getState();
       if (state === 'starting' || state === 'listening') return voice.stop();
+      Speech.stop();                     // never talk over the person, and do not let the mic hear LUNA
       voice.listen();
     },
 

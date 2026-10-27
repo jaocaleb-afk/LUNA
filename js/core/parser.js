@@ -1,76 +1,112 @@
-/* Parser: turns a typed or spoken sentence into an action object.
-   Pure function, no DOM. Example: "set a five minute timer" -> {type:'timer.set', seconds:300} */
+/* Parser: turns a typed or spoken sentence into an action object. Pure function, no DOM.
+
+     "set a five minute timer"                 -> {type:'timer.set', seconds:300}
+     "how much time is left?"                  -> {type:'timer.status', ask:'remaining', target:'any'}
+     "cancel that timer"                       -> {type:'timer.cancel', target:'any'}
+     "cancel the screen time timer"            -> {type:'timer.cancel', target:'screentime'}
+
+   Instead of one exact phrase per command, each command is recognised by its INTENT (a few keyword tests, in a
+   fixed order), and durations are read by DurationParser, which understands hours, minutes and seconds together.
+   Leading "LUNA," and "please" are ignored, so "LUNA, please set a timer for 10 minutes" works. (This is not a
+   wake phrase: commands are only heard after Talk is tapped.) */
 const Parser = (() => {
-  const UNIT_SECONDS = { sec: 1, second: 1, minute: 60, min: 60, hour: 3600, hr: 3600 };
-  const MAX_SECONDS = 86400;
+  const SCREENS = ['home', 'timer', 'schedules', 'assistant', 'backgrounds', 'settings', 'screentime'];
 
-  const ONES = new Map(Object.entries({
-    zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
-    ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
-    sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
-  }));
-  const TENS = new Map(Object.entries({
-    twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
-  }));
-  const UNIT_WORD = /^(hour|minute|min|second|sec)s?$/;
+  const TIMER_WORD = /\b(timers?|countdowns?)\b/;
+  const SCREEN_TIME = /\bscreen ?time\b/;
+  const SET_VERB = /\b(set|start|begin|make|create|give|need|want|put|run|add|launch)\b/;
+  const STATUS_LEFT = /\b(left|remaining|remain|remains)\b/;
+  const STATUS_ASK = /\b(check|status|how long|how much|when|what time|finish|finished|finishes|done|over)\b/;
+  const FINISH_ASK = /\b(when|what time)\b/;
 
-  /* Speech engines sometimes return "five minute" instead of "5 minute".
-     Converts number words to digits: "twenty five" -> "25", "a minute" -> "1 minute". */
-  function numberWordsToDigits(text) {
-    const words = text.replace(/-/g, ' ').split(' ');
-    const out = [];
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const next = words[i + 1];
-      if (TENS.has(word)) {
-        let n = TENS.get(word);
-        const unit = ONES.get(next);
-        if (unit > 0 && unit < 10) { n += unit; i++; }
-        out.push(String(n));
-      } else if (ONES.has(word)) {
-        out.push(String(ONES.get(word)));
-      } else if ((word === 'a' || word === 'an') && UNIT_WORD.test(next || '')) {
-        out.push('1');
-      } else {
-        out.push(word);
-      }
-    }
-    return out.join(' ');
-  }
+  /* Control commands: the verb, plus nothing but these filler words ("can you pause my timer please"). */
+  const CONTROL_VERBS = new Map(Object.entries({
+    pause: 'pause', hold: 'pause', freeze: 'pause',
+    resume: 'resume', continue: 'resume', unpause: 'resume',
+    cancel: 'cancel', stop: 'cancel', delete: 'cancel', clear: 'cancel', end: 'cancel', remove: 'cancel', abort: 'cancel', kill: 'cancel',
+    reset: 'reset',
+  }));
+  const FILLER = new Set(['the', 'my', 'that', 'this', 'it', 'a', 'current', 'timer', 'countdown', 'can', 'you', 'could',
+    'would', 'will', 'now', 'screen', 'time', 'screentime', 'normal', 'ordinary', 'kitchen']);
 
   const fail = (error) => ({ ok: false, error });
   const succeed = (action) => ({ ok: true, action });
 
+  function normalize(raw) {
+    return String(raw || '').toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/[.,!?;:]/g, ' ')
+      .replace(/\bturn off\b/g, 'stop')
+      .replace(/\s+/g, ' ').trim()
+      .replace(/^(?:ok(?:ay)? |hi |hello )?luna\b ?/, '')
+      .replace(/\bplease\b/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  const target = (text) => (SCREEN_TIME.test(text) ? 'screentime' : 'any');
+
+  /* ---------- intents, tried in this order ---------- */
+  function navigation(text) {
+    if (/^(?:go )?(?:back )?(?:to )?(?:the )?home(?: screen)?$/.test(text)) return { type: 'nav', screen: 'home' };
+    const m = /^(?:open|show(?: me)?|go to|switch to)(?: the)? (settings|timer|assistant|schedules|backgrounds|screen ?time(?: timer)?)(?: screen| page)?$/.exec(text);
+    if (!m) return null;
+    const screen = SCREEN_TIME.test(m[1]) ? 'screentime' : m[1];
+    return SCREENS.includes(screen) ? { type: 'nav', screen } : null;
+  }
+
+  function timerStatus(text) {
+    if (SET_VERB.test(text) && DurationParser.mentions(text)) return null;          // "set a timer for the time left" etc.
+    const mentionsTimer = TIMER_WORD.test(text) || SCREEN_TIME.test(text);
+    if (!(STATUS_LEFT.test(text) || (mentionsTimer && STATUS_ASK.test(text)))) return null;
+    return { type: 'timer.status', ask: FINISH_ASK.test(text) ? 'finish' : 'remaining', target: target(text) };
+  }
+
+  function clockQuestion(text) {
+    return /\bwhat time is it\b|\bwhats the time\b|\bwhat is the time\b|^(?:tell me )?the time$|^time$/.test(text)
+      ? { type: 'clock.say' } : null;
+  }
+
+  function timerControl(text) {
+    const verbs = [];
+    for (const word of text.split(' ')) {
+      if (CONTROL_VERBS.has(word)) verbs.push(CONTROL_VERBS.get(word));
+      else if (!FILLER.has(word)) return null;            // anything else: not a plain control command
+    }
+    if (verbs.length !== 1) return null;
+    if (text.split(' ').length > 1 && !(TIMER_WORD.test(text) || SCREEN_TIME.test(text) || /\b(it|that|this)\b/.test(text))) return null;
+    return { type: 'timer.' + verbs[0], target: target(text) };
+  }
+
+  function timerSet(text, raw) {
+    const wantsTimer = TIMER_WORD.test(text) || SET_VERB.test(text);
+    if (!wantsTimer) return null;
+    if (SCREEN_TIME.test(text)) {
+      return fail('Screen Time sessions are started with the Start button on the Screen Time screen.');
+    }
+    if (!DurationParser.mentions(text)) {
+      return TIMER_WORD.test(text) && SET_VERB.test(text) ? fail(DurationParser.MESSAGES.missing) : null;
+    }
+    const duration = DurationParser.read(raw);
+    if (!duration.ok) return fail(duration.error);
+    return succeed({ type: 'timer.set', seconds: duration.seconds });
+  }
+
   function parse(raw) {
-    const text = numberWordsToDigits(
-      String(raw || '').toLowerCase().replace(/[.,!?]/g, '').replace(/\s+/g, ' ').trim()
-    );
+    const text = normalize(raw);
     if (!text) return fail('Type a command, for example “set a 5 minute timer”.');
 
-    let m = text.match(/^(?:set|start)(?: a| an)? (?:timer (?:for|of) )?(\d+) (second|sec|minute|min|hour|hr)s?(?: timer)?$/);
-    if (m) {
-      const seconds = parseInt(m[1], 10) * UNIT_SECONDS[m[2]];
-      if (!(seconds >= 1)) return fail('A timer needs at least 1 second.');
-      if (seconds > MAX_SECONDS) return fail('Timers can be up to 24 hours.');
-      return succeed({ type: 'timer.set', seconds });
+    for (const intent of [navigation, timerStatus, clockQuestion, timerControl]) {
+      const action = intent(text);
+      if (action) return succeed(action);
     }
+    const set = timerSet(text, raw);
+    if (set) return set;
 
-    m = text.match(/^(pause|resume|cancel|reset)(?: the)? timer$/);
-    if (m) return succeed({ type: 'timer.' + m[1] });
-
-    if (/^(what time is it|what is the time|whats the time|what time is it now)$/.test(text)) {
-      return succeed({ type: 'clock.say' });
-    }
-    if (/^(go home|go to home|home)$/.test(text)) return succeed({ type: 'nav', screen: 'home' });
-    if (/^open (settings|timer|assistant|schedules|backgrounds)$/.test(text)) {
-      return succeed({ type: 'nav', screen: text.split(' ')[1] });
-    }
-
-    if (/timer/.test(text)) {
-      return fail('I couldn’t read that timer command. Try “set a 5 minute timer” or “pause the timer”.');
+    if (TIMER_WORD.test(text)) {
+      return fail('I couldn’t read that timer command. Try “set a 5 minute timer” or “how much time is left?”.');
     }
     return fail('Unsupported command: “' + text + '”.');
   }
 
-  return { parse };
+  return { parse, normalize };
 })();

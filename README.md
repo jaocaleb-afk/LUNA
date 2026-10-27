@@ -1,7 +1,7 @@
 # LUNA (new version)
 
-Clock-first kiosk display with timer, schedules, idle-hiding controls, push-to-talk voice commands and an
-optional PIN-protected fullscreen kiosk mode.
+Clock-first kiosk display with timer, schedules, idle-hiding controls, push-to-talk voice commands with spoken
+replies, a protected **Screen Time Timer**, and an optional PIN-protected fullscreen kiosk mode.
 Plain HTML/CSS/JS, no build step, no dependencies. Serve the folder with any static web server.
 
 ## Run it
@@ -19,7 +19,7 @@ python3 -m http.server 8082          # port 8081 (the existing version) is never
 
 Hard-refresh after copying new files: Ctrl+Shift+R.
 If the on-screen controls are hidden and you cannot reveal them, open `…/#settings`
-(also `#timer`, `#schedules`, `#assistant`, `#backgrounds`).
+(also `#timer`, `#screentime`, `#schedules`, `#assistant`, `#backgrounds`).
 
 Saved data is **per address**: settings, schedules, backgrounds and the PIN saved at `http://localhost:8082` are
 separate from those saved at `https://192.168.1.97:8443`. Set things up on the address the display will actually use.
@@ -30,10 +30,13 @@ Every file has one job and starts with a comment saying what it is. Nothing is b
 in dependency order. `js/core/` is pure logic with **no DOM access** (unit-testable in Node). `js/app/` connects it to the page.
 
 ```
-index.html                  page structure (screens, dialogs, PIN gate)
-css/luna.css                all styling
+index.html                  page structure (screens, dialogs, PIN gate, Screen Time alert)
+css/luna.css                all styling except:
+css/screen-time.css         Screen Time screen, home readout and alert
+docs/screen-time.md         Screen Time Timer: rules, storage, alert, limits (read this for that feature)
 js/core/                    PURE LOGIC (tested in Node)
-  parser.js                   text/voice sentence -> action  ("set a five minute timer")
+  duration-parser.js          "3 hours, 2 minutes and 19 seconds" -> 10939 s; rejects anything ambiguous; reads durations back in words
+  parser.js                   text/voice sentence -> action, by intent  ("set a five minute timer", "how much time is left?")
   timer-engine.js             timer state machine (idle/running/paused/done/ready)
   schedule-time.js            calendar maths: next run, due/missed, local time zone, DST
   schedule.js                 what a rule is: validation, collisions, sanitising stored data, wording
@@ -43,9 +46,16 @@ js/core/                    PURE LOGIC (tested in Node)
   voice-session.js            push-to-talk recogniser state machine (honest about "listening")
   pin.js                      exit-PIN rules, salted PBKDF2 hashing (Web Crypto), wrong-PIN limiter
   kiosk-gate.js               fullscreen kiosk modes: normal / kiosk / confirm-exit / locked
+  speech-output.js            spoken replies (text-to-speech): voice choice, newest-reply-wins, safe when unsupported
+  screen-time-policy.js       Screen Time rules: weekday limit + gap, weekend back-to-back rule, local midnight
+  screen-time-storage.js      Screen Time saved-data shape and validation (corrupt data locks, never grants)
+  screen-time-timer.js        the protected 20-minute session (there is no stop/pause/cancel method)
 js/app/                     PAGE CODE
   util.js  settings.js  nav.js  clock.js  sound.js  main.js     shared pieces + start-up
   timer-ui.js                 Timer screen, home readout, "time's up" alert
+  timer-replies.js            what LUNA does/answers for timer commands (ordinary timer + Screen Time questions)
+  speech.js                   spoken replies on the page + the Settings "Spoken replies" card
+  screen-time-store.js  screen-time-alarm.js  screen-time-text.js  screen-time-ui.js   Screen Time storage / beep / wording / screen
   rules-store.js              saved rules + activity log (localStorage)
   schedule-runner.js          1-second loop; the "start timer" action and conflict policy
   schedule-format.js          words/dates for rule cards
@@ -60,13 +70,14 @@ js/app/                     PAGE CODE
 deploy/
   Caddyfile.luna-https        example Caddy site: HTTPS on port 8443 in front of the existing port 8082
 tests/
-  run-core-tests.js           node tests/run-core-tests.js          (80 unit tests, ~1 s)
-  run_ui_tests.py             python3 tests/run_ui_tests.py [name]  (323 browser checks, a few minutes)
+  run-core-tests.js           node tests/run-core-tests.js          (136 unit tests, ~2 s)
+  run_ui_tests.py             python3 tests/run_ui_tests.py [name]  (411 browser checks, ~10 minutes)
   core/*.test.js, ui/test_*.py   one test file per module / screen
 ```
 
 localStorage keys: `luna.settings.v1`, `luna.bg.v2`, `luna.rules.v1`, `luna.voice.consent.v1`, `luna.pin.v1` (PIN hash only),
-`luna.kiosk.v1` (true while in kiosk mode, so a reload comes back to the PIN screen).
+`luna.kiosk.v1` (true while in kiosk mode, so a reload comes back to the PIN screen), `luna.screentime.v1` (Screen Time sessions;
+see `docs/screen-time.md`). Restore defaults resets `luna.settings.v1` and backgrounds only.
 
 ## Schedules: how they behave
 
@@ -81,8 +92,8 @@ localStorage keys: `luna.settings.v1`, `luna.bg.v2`, `luna.rules.v1`, `luna.voic
 
 ## Voice commands (push-to-talk)
 
-- Tap **Talk** (home screen or Assistant screen), say a command ("set a five minute timer", "what time is it",
-  "pause the timer", "open settings"). No wake phrase is needed or used: the first full sentence heard is the command.
+- Tap **Talk** (home screen or Assistant screen), say a command (see the list below). No wake phrase is needed or used:
+  the first full sentence heard is the command. Starting with "LUNA, …" is fine; the name is ignored.
 - One tap = one command. The microphone opens for that one sentence and closes again. If nothing is heard for 8 seconds,
   LUNA says "I didn't catch a command" and stops. While it is starting the button says **Cancel**, while listening **Stop**.
 - There is no always-listening mode. (Older versions had a "Hey LUNA" wake phrase; it has been removed. Its saved
@@ -104,6 +115,46 @@ What has to be true for voice to work, and what LUNA shows when it is not:
 
 Settings → *Voice commands* shows "Secure page: <address>" or "Not a secure page: <address>", so you can check the HTTPS setup from the screen.
 Everything that is not voice keeps working when voice is unavailable.
+
+### What you can say
+
+These are examples, not exact phrases: LUNA looks for the intent (set / check / pause / cancel …) and reads the duration
+separately, so word order, singular/plural, punctuation, "a"/"an", number words and digits all work. The same commands can be typed in the Assistant box.
+
+| Kind | Examples |
+|---|---|
+| Start a timer | "Set a timer for 10 minutes." · "Set a 10-minute timer." · "Start a timer for 30 seconds." · "Set a timer for 2 hours." · "Set a 3 hour, 2 minute, 19 second timer." · "Start a countdown for 1 hour and 15 minutes." · "I need a timer for 45 minutes and 12 seconds." · "Give me a five-minute timer." · "Start a timer for 0 hours, 3 minutes, and 5 seconds." · "Set a timer for half an hour." · "…an hour and a half" · "…1.5 hours" · "…5m 30s" |
+| Check it | "How much time is left?" · "How long is left on my timer?" · "Check the timer." · "Tell me the remaining time." · "When will my timer finish?" (gives the clock time) · "How much screen time is left?" |
+| Control it | "Pause the timer" · "Resume" / "Continue" · "Reset the timer" · "Cancel that timer" / "Stop the countdown" / "Turn off the timer" |
+| Other | "What time is it?" · "Open settings" / "Show the schedules screen" / "Open screen time" · "Go home" |
+
+The confirmation always reads back what LUNA understood, and the timer on screen shows the same duration:
+"Set a 3 hour, 2 minute, 19 second timer." → **"Starting a timer for 3 hours, 2 minutes, and 19 seconds."** and 3:02:19.
+
+**Durations LUNA refuses rather than guesses** (it says why, on screen and aloud): a number without a unit ("set a timer for 5",
+"5 minutes and 30"), the same unit twice, a range ("10 to 15 minutes"), "1:30" (minutes or hours?), vague amounts
+("a few minutes"), fractions other than "half" ("a quarter of an hour"), negative values, decimals that are not whole
+seconds ("1.33 minutes"), zero, and anything over 24 hours. Number words are read up to the hundreds ("one hundred and twenty seconds").
+
+Parsing limits: English only; ordinals, "dozen", "quarter" and the like are not understood; timers start immediately
+(there is no "at 3 PM"); one ordinary timer at a time. Speech recognition may still mishear you, which is why the
+duration is read back.
+
+### Spoken replies
+
+When you give a **voice** command, LUNA also says its reply aloud (the same words as on screen), using the browser's
+built-in speech synthesis (`speechSynthesis`); no API key or paid service. This is separate from speech *recognition*:
+a browser can have one without the other.
+
+- Voice choice: a voice for the selected language (Settings → Language), preferring the system default and on-device
+  voices; joke/effect voices are skipped. If none suits, the browser's default voice is used. The chosen voice is named in Settings.
+- Only answers to voice commands are spoken (confirmations, answers, errors, "I didn't catch a command"). Typed commands,
+  ticking timers and other screen updates are silent.
+- A new reply replaces one still being spoken; replies never queue up. Tapping **Talk** silences LUNA first, so it
+  does not talk over you and the microphone does not hear it.
+- Settings → **Spoken replies**: On / Off, and **Test voice**. Off (or a browser without speech synthesis) means text replies only.
+- On Raspberry Pi OS, Chromium usually needs `speech-dispatcher` with a voice such as `espeak-ng` installed to speak at all,
+  and those voices sound robotic. Chrome on ChromeOS has built-in voices. Not yet tested on either device.
 
 Chromium's `--unsafely-treat-insecure-origin-as-secure` flag can make a plain-http address count as secure for a quick
 **temporary test** on one machine. It is not a fix: it weakens that browser's security and is not used in the instructions below.
@@ -234,6 +285,20 @@ A web page cannot stop the browser or the device from doing what it is told. The
 For real enforcement, use the device's kiosk features as well: on ChromeOS, a managed kiosk app or kiosk policies from the
 Google Admin console; on the Raspberry Pi, start Chromium with `--kiosk` (no browser UI) under a dedicated user account.
 
+## Screen Time Timer
+
+A separate, protected 20-minute session timer (dock → **Screen Time**). Full rules, storage, alert behaviour and limits are
+in **[docs/screen-time.md](docs/screen-time.md)**. In short:
+
+- **Weekdays:** up to 4 sessions per local calendar day, each followed by a 10-minute gap (measured from when the session
+  ended). The count resets at local midnight.
+- **Weekends:** no daily limit; after two back-to-back sessions (the second started less than 10 minutes after the first
+  ended), the next waits until 10 minutes after the second ended.
+- A running session cannot be paused, stopped, shortened or cancelled. There is no control for it, and the ordinary timer's
+  buttons and voice commands cannot reach it. When it ends, an alarm beeps until **Dismiss** is pressed. Dismissing refunds nothing.
+- State survives reloads and is recalculated from saved timestamps. Corrupt or edited data locks starting until midnight rather than granting sessions.
+- It is a timer, not a lock: anyone who can change browser data, the clock or LUNA's files can get around it (see the doc).
+
 ## Run the tests
 
 ```bash
@@ -241,7 +306,7 @@ node tests/run-core-tests.js                      # unit tests, no browser neede
 
 pip install playwright && playwright install chromium
 python3 tests/run_ui_tests.py                     # all browser tests (starts its own local server)
-python3 tests/run_ui_tests.py kiosk               # one group: legacy layout idle timer schedules schedule_run voice pin kiosk
+python3 tests/run_ui_tests.py kiosk               # one group: legacy layout idle timer schedules schedule_run voice speech screen_time pin kiosk
 LUNA_URL=https://192.168.1.97:8443/index.html python3 tests/run_ui_tests.py   # against a running server (here: the HTTPS one)
 ```
 
@@ -256,6 +321,14 @@ The browser tests move a **simulated clock**, so "9:00 AM" and a 5-minute idle t
 - **Fullscreen** tests use headless Chromium's **real** Fullscreen API (clicks provide the user gesture). Automation cannot
   press the browser's own Esc/exit control, so a script calls `document.exitFullscreen()` as a stand-in: the page gets the
   same `fullscreenchange` event, but the real browser control is only covered by the manual check below.
+- **Spoken replies** use a **mock** `speechSynthesis` that records what LUNA says and keeps a real queue. They prove: what is
+  said, that it matches the screen, newest-reply-wins, Talk silences LUNA, the off switch, voice choice/fallback, and no crash
+  without speech synthesis. One check also runs the real headless-Chromium `speechSynthesis` for errors. Nothing was *heard*.
+- **Command parsing** is unit-tested in Node (`duration-parser.test.js`, `parser-commands.test.js`: every example from the brief,
+  zero components, number words, singular/plural, rejected inputs, limits) and end-to-end through the mock recogniser.
+- **Screen Time** core tests use injected fake wall and monotonic clocks (delayed callbacks, reloads, midnight, DST, clock set back,
+  device sleep, corrupt data, failed saves). Browser tests use Playwright's fake clock in the real page, with earlier sessions
+  seeded into storage so no test waits real minutes. The alarm loop is checked by counting beep groups; whether it is audible is not testable here.
 - **PIN** tests run the real Web Crypto PBKDF2 code in Node and in Chromium, and check what is actually written to localStorage.
 - Insecure pages are simulated in the default run by overriding `isSecureContext` / `crypto.subtle`. Run the suite with
   `LUNA_URL` against the real HTTPS address to also test the real secure context.
@@ -277,5 +350,19 @@ The browser tests move a **simulated clock**, so "9:00 AM" and a 5-minute idle t
 3. On the PIN screen: tap **Return to fullscreen** (tap again if the browser refuses). Then exit with the browser's own control and unlock with the right PIN.
 4. In kiosk mode, reload (Ctrl+R): the PIN screen is shown after the reload.
 5. On the Pi's touchscreen: the on-screen keypad works with taps, and the first tap is not lost when the controls had faded.
+
+**Spoken replies (ChromeOS and the Pi):**
+1. Settings → Spoken replies: note the voice named. Tap **Test voice**: you should hear "This is how LUNA sounds."
+   On the Pi, if nothing is heard: `sudo apt install speech-dispatcher espeak-ng`, restart Chromium, and try again.
+2. Voice on → Talk → "set a 3 hour, 2 minute, 19 second timer": LUNA says "Starting a timer for 3 hours, 2 minutes, and 19 seconds." and the readout shows 3:02:19.
+3. "How much time is left?": the spoken answer matches the readout. Then tap Talk while LUNA is speaking: it stops at once.
+4. Spoken replies → Off: commands still show their reply, silently.
+
+**Screen Time (on the Pi's display):**
+1. Start a session. Confirm there is no way to pause/stop it from the screen, the Timer screen, or by voice ("cancel that timer").
+2. Let it finish (or test with patience): the alarm must be clearly audible and continue until Dismiss. Dismiss silences it at once.
+3. Reload during the alert: the alert returns. If the browser blocks sound, the alert says so; one tap starts the beeping.
+4. Check the cooldown time shown, the 4-session weekday limit, and (overnight) the reset at midnight.
+5. After a reboot without network, if the clock is wrong, expect **Blocked** until the clock is correct.
 
 **Pi display (unchanged from before):** layout at the real resolution, tap targets, background animation performance, and a multi-day run of schedules.

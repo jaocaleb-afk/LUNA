@@ -80,7 +80,7 @@ def push_to_talk(browser, r):
     chk('the recognised words are shown while speaking', 'set a five minute' in pg.inner_text('#vbubble'), pg.inner_text('#vbubble'))
     pg.evaluate("__say([['set a five minute timer', true]])")
     chk('the command ran with no wake phrase: a 5:00 timer started', pg.evaluate("TimerEngine.snapshot().duration") == 300000)
-    chk('the recognised command AND the response are displayed', 'set a five minute timer' in pg.inner_text('#vbubble') and 'Timer set for 5:00' in pg.inner_text('#vbubble'), pg.inner_text('#vbubble'))
+    chk('the recognised command AND the response are displayed', 'set a five minute timer' in pg.inner_text('#vbubble') and 'Starting a timer for 5 minutes.' in pg.inner_text('#vbubble'), pg.inner_text('#vbubble'))
     chk('the microphone stops after the command, the indicator goes away and Talk is back',
         not pg.evaluate("__last().started") and not pg.is_visible('#vind') and pg.inner_text('#talk') == '🎤 Talk')
     pg.click('#talk'); pg.evaluate("__audio()"); pg.evaluate("__say([['what time is it', true]])")

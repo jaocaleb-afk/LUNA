@@ -85,4 +85,5 @@ Settings.register('sound', true, isBoolean);
 Settings.register('idleSec', 10, (v) => IDLE_CHOICES_SECONDS.includes(v));
 Settings.register('voiceOn', false, isBoolean);
 Settings.register('voiceLang', 'en-US', (v) => VLANGS.some((l) => l[0] === v));
+Settings.register('speakOn', true, isBoolean);    // spoken replies to voice commands (text replies are always shown)
 Settings.load();

@@ -1,6 +1,6 @@
 """Schedules screen: creating, editing, enabling/disabling, deleting and validating rules; persistence."""
 import json
-from helpers import open_page, advance, la, rule_dict, rules_storage, create_rule_via_ui
+from helpers import go, open_page, advance, la, rule_dict, rules_storage, create_rule_via_ui
 
 START = la(2026, 10, 26, 8, 0, 0)  # a Monday
 OPEN = dict(clock=START, settings={'idleSec': 0}, label='schedules')
@@ -16,7 +16,7 @@ def run(browser, r):
 
     # ---- the explanation people must see ----
     ctx, pg = open_page(browser, r, **OPEN)
-    pg.click('#dock [data-go=schedules]')
+    go(pg, 'schedules')
     info = pg.inner_text('#rinfo')
     chk('explains that the page must stay open and the device awake', 'only run while this LUNA page is open' in info and 'device is awake' in info)
     chk('explains that an active timer is never interrupted', 'never interrupts' in info)
@@ -36,7 +36,7 @@ def run(browser, r):
 
     # ---- persistence ----
     pg.reload(); pg.wait_for_timeout(300)
-    pg.click('#dock [data-go=schedules]')
+    go(pg, 'schedules')
     chk('the rule survives a reload', cards(pg) == ['Morning timer'])
     stored = json.loads(pg.evaluate("localStorage.getItem('luna.rules.v1')"))
     chk('...stored with its fields', stored['rules'][0]['time'] == '09:00' and stored['rules'][0]['seconds'] == 120 and stored['rules'][0]['repeat'] == 'daily')
@@ -79,7 +79,7 @@ def run(browser, r):
 def validation(browser, r):
     chk = r.check
     ctx, pg = open_page(browser, r, **OPEN)
-    pg.click('#dock [data-go=schedules]'); pg.click('#rnew')
+    go(pg, 'schedules'); pg.click('#rnew')
 
     pg.fill('#r-name', ''); pg.fill('#r-min', '0'); pg.fill('#r-sec', '0')
     pg.click('#redit button:has-text("Save rule")')
@@ -115,7 +115,7 @@ def validation(browser, r):
 def weekdays_and_warnings(browser, r):
     chk = r.check
     ctx, pg = open_page(browser, r, storage=rules_storage(rule_dict('Early bird', '09:00', 600)), **OPEN)
-    pg.click('#dock [data-go=schedules]')
+    go(pg, 'schedules')
     create_rule_via_ui(pg, 'Weekday walk', '07:30', 15, 0, 'Selected days')   # Mon-Fri preselected
     chk('selected days are shown as "Weekdays"', 'Weekdays' in pg.inner_text('#rlist'), pg.inner_text('#rlist'))
 
@@ -139,7 +139,7 @@ def bad_storage(browser, r):
         rule_dict('Good one'), {'id': 'x', 'name': '', 'time': '99:99'}, None, 'text', 7,
         dict(rule_dict('Bad duration', rid='r2'), seconds=-5), dict(rule_dict('Bad repeat', rid='r3'), repeat='weekly')], 'log': 'nope'})}
     ctx, pg = open_page(browser, r, storage=junk, **OPEN)
-    pg.click('#dock [data-go=schedules]')
+    go(pg, 'schedules')
     chk('corrupt stored rules are dropped; the valid one is kept', cards(pg) == ['Good one'], cards(pg))
     chk('a corrupt activity log does not break the page', 'Nothing has run yet' in pg.inner_text('#rlog'))
     ctx.close()

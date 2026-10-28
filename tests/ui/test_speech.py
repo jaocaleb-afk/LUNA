@@ -2,7 +2,7 @@
 MOCK SpeechRecognition (helpers.MOCK_SYNTH / MOCK_SPEECH). These prove LUNA's own behaviour: what it says, that the
 screen and the voice agree, that replies do not pile up, and that it copes without speech synthesis.
 They do NOT prove that a real voice is audible on your device: see README "Real-device checks"."""
-from helpers import open_page, la, advance, MOCK_SPEECH, MOCK_SYNTH, NO_SYNTH
+from helpers import go, open_page, la, advance, MOCK_SPEECH, MOCK_SYNTH, NO_SYNTH
 
 SETTINGS = {'idleSec': 0}
 SPOKEN = "window.__spoken"
@@ -14,7 +14,7 @@ def page(browser, r, scripts=(MOCK_SPEECH, MOCK_SYNTH), clock=None, settings=SET
 
 
 def voice_on(pg):
-    pg.click('#dock [data-go=settings]'); pg.click('#vtoggle'); pg.click('#vyes')
+    go(pg, 'settings'); pg.click('#vtoggle'); pg.click('#vyes')
     pg.click('.screen.on [data-go=home]')
 
 
@@ -36,7 +36,7 @@ def run(browser, r):
 def replies(browser, r):
     chk = r.check
     ctx, pg = page(browser, r, clock=la(2026, 10, 26, 9, 0, 0))
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     stat = pg.inner_text('#ssstat')
     chk('Settings has a "Spoken replies" card, on by default, naming the chosen standard voice',
         'On.' in stat and 'Test English (en-US)' in stat and pg.get_attribute('#sson', 'aria-pressed') == 'true', stat)
@@ -64,10 +64,10 @@ def replies(browser, r):
     pg.click('#talk')
 
     pg.evaluate("Speech.say('one'); Speech.say('two'); Speech.say('three')")
-    chk('replies never pile up: only the newest is queued', pg.evaluate("__queue.map(u => u.text)") == ['three'], pg.evaluate("__queue.map(u => u.text)"))
+    chk('replies never pile up: only the newest is queued', pg.evaluate("__queue.map(u => u.text)") == ['three.'], pg.evaluate("__queue.map(u => u.text)"))
 
     spoken_before = len(pg.evaluate(SPOKEN))
-    pg.click('#dock [data-go=assistant]')
+    go(pg, 'assistant')
     pg.fill('.screen.on .cmd input', 'how much time is left'); pg.keyboard.press('Enter')
     chk('typed commands are answered on screen only, not aloud', len(pg.evaluate(SPOKEN)) == spoken_before and 'remaining' in pg.inner_text('.screen.on .log'))
     pg.click('.screen.on [data-go=home]')
@@ -75,7 +75,7 @@ def replies(browser, r):
     command(pg, 'set a timer for banana')
     chk('a command error is spoken as well as shown', 'How long should the timer be?' in pg.evaluate(SPOKEN)[-1] and 'How long' in pg.inner_text('#vbubble'))
     pg.click('#talk'); pg.evaluate("__audio()"); advance(pg, 8500)
-    chk('"I didn’t catch a command" is spoken too', pg.evaluate(SPOKEN)[-1] == 'I didn’t catch a command.', pg.evaluate(SPOKEN)[-1])
+    chk('"I didn’t hear anything" is spoken too', pg.evaluate(SPOKEN)[-1] == 'I didn’t hear anything.', pg.evaluate(SPOKEN)[-1])
     ctx.close()
 
 
@@ -111,7 +111,7 @@ def switched_off(browser, r):
     chk = r.check
     ctx, pg = page(browser, r)
     voice_on(pg)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     pg.evaluate("__queue.push({text:'speaking'})")
     pg.click('#ssoff')
     chk('turning spoken replies off stops any speech at once', pg.evaluate("__queue.length") == 0)
@@ -122,19 +122,19 @@ def switched_off(browser, r):
     chk('with replies off nothing is spoken, but the reply is still shown and the command runs',
         pg.evaluate(SPOKEN) == [] and 'Starting a timer for 2 minutes.' in pg.inner_text('#vbubble') and pg.evaluate("TimerEngine.snapshot().duration") == 120000)
     pg.reload(); pg.wait_for_timeout(200)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('the setting survives a reload', pg.get_attribute('#ssoff', 'aria-pressed') == 'true')
     pg.click('#sson')
     chk('turning it back on works', pg.get_attribute('#sson', 'aria-pressed') == 'true' and not pg.is_disabled('#sstest'))
     pg.click('#sstest')
-    chk('"Test voice" speaks a sample', pg.evaluate(SPOKEN)[-1] == 'This is how LUNA sounds.')
+    chk('"Test voice" speaks a sample', pg.evaluate(SPOKEN)[-1] == 'Hi, I’m Luna. This is how I sound.')
     ctx.close()
 
 
 def no_synthesis(browser, r):
     chk = r.check
     ctx, pg = page(browser, r, scripts=(MOCK_SPEECH, NO_SYNTH))
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('without speech synthesis the card says replies are text only, and its buttons are disabled',
         'no speech synthesis' in pg.inner_text('#ssstat') and pg.is_disabled('#sson') and pg.is_disabled('#sstest'), pg.inner_text('#ssstat'))
     pg.click('.screen.on [data-go=home]')
@@ -146,10 +146,12 @@ def no_synthesis(browser, r):
 
     # default voice fallback: the browser reports no voices (Chrome before its list has loaded, or a bare Linux)
     ctx, pg = page(browser, r, scripts=(MOCK_SPEECH, 'window.__voices = [];', MOCK_SYNTH))
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('with no voices listed, the browser’s default voice is used', 'default voice' in pg.inner_text('#ssstat'), pg.inner_text('#ssstat'))
     pg.click('#sstest')
-    chk('...and it still speaks, without picking a voice', pg.evaluate(SPOKEN) == ['This is how LUNA sounds.'] and pg.evaluate("__queue[0].voice") is None)
+    chk('...it waits briefly for a voice list to load before speaking', pg.evaluate(SPOKEN) == [])
+    pg.wait_for_timeout(1800)
+    chk('...then still speaks, without picking a voice', pg.evaluate(SPOKEN) == ['Hi, I’m Luna. This is how I sound.'] and pg.evaluate("__queue[0].voice") is None, pg.evaluate(SPOKEN))
     ctx.close()
 
 
@@ -158,7 +160,7 @@ def real_browser_synthesis(browser, r):
     chk = r.check
     ctx, pg = page(browser, r, scripts=())
     errors_before = len(r.errors)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     pg.click('#sstest') if not pg.is_disabled('#sstest') else None
     pg.wait_for_timeout(800)
     chk('with the browser’s real speechSynthesis, the card renders and Test voice raises no error',

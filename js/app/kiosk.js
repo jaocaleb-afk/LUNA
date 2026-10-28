@@ -43,7 +43,7 @@ const Kiosk = (() => {
   function renderDockButton(view) {
     const button = $('#fs');
     button.hidden = !supported;
-    setText(button, inKiosk(view.mode) ? 'Exit fullscreen' : 'Fullscreen');
+    setText($('.lbl', button), inKiosk(view.mode) ? 'Exit fullscreen' : 'Fullscreen');
   }
 
   function renderCard(view) {

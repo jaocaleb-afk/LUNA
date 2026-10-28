@@ -1,7 +1,7 @@
 """The ORIGINAL UI checks (backgrounds, settings, timer, text commands, corrupt storage), kept as they were.
 Only selectors changed where the UI did (e.g. timer buttons now carry data-act)."""
 import json
-from helpers import open_page
+from helpers import go, open_page
 
 NEVER_HIDE = {'idleSec': 0}  # these older checks click around slowly; do not let the controls fade mid-test
 
@@ -12,7 +12,7 @@ def run(browser, r):
     chk = r.check
 
     chk('home clock renders', ':' in pg.inner_text('#hm'))
-    pg.click('#dock [data-go=backgrounds]'); pg.wait_for_timeout(200)
+    go(pg, 'backgrounds'); pg.wait_for_timeout(200)
     chk('library has 7 defaults', pg.locator('#lib .btn').count() == 7)
     pg.click('#bgnew'); pg.wait_for_timeout(100)
     pg.locator('.stop input[type=text]').first.fill('#ff0000'); pg.wait_for_timeout(100)
@@ -30,17 +30,17 @@ def run(browser, r):
     chk('animated applies animation', pg.evaluate("getComputedStyle(document.getElementById('bgl')).animationName") != 'none')
     pg.click('text=Use as background'); pg.reload(); pg.wait_for_timeout(300)
     chk('persists across reload', json.loads(pg.evaluate("localStorage.getItem('luna.bg.v2')"))['active'] != 'midnight')
-    pg.click('#dock [data-go=settings]'); pg.click('button:has-text("Reduce")'); pg.wait_for_timeout(100)
+    go(pg, 'settings'); pg.click('button:has-text("Reduce")'); pg.wait_for_timeout(100)
     chk('reduced motion stops animation', pg.evaluate("getComputedStyle(document.getElementById('bgl')).animationName") == 'none')
     pg.click('#reset'); pg.click('#yes'); pg.wait_for_timeout(100)
     chk('restore defaults', len(json.loads(pg.evaluate("localStorage.getItem('luna.bg.v2')"))['list']) == 7)
 
-    pg.click('.screen.on [data-go=home]'); pg.click('#dock [data-go=timer]'); pg.click('[data-m="1"]')
+    pg.click('.screen.on [data-go=home]'); go(pg, 'timer'); pg.click('[data-m="1"]')
     pg.click('#tctl [data-act=start]'); pg.wait_for_timeout(300)
     chk('timer runs', pg.inner_text('#tst') == 'Running')
     pg.click('#tctl [data-act=pause]'); chk('timer pauses', pg.inner_text('#tst') == 'Paused')
     pg.click('#tctl [data-act=cancel]')
-    pg.click('.screen.on [data-go=home]'); pg.click('#dock [data-go=assistant]')
+    pg.click('.screen.on [data-go=home]'); go(pg, 'assistant')
     pg.fill('.cmd input', 'set a 5 minute timer'); pg.keyboard.press('Enter')
     chk('text command drives timer', pg.evaluate("TimerEngine.snapshot().state") == 'running')
 

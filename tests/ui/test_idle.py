@@ -1,6 +1,6 @@
 """Idle behaviour: controls hide after a configurable inactivity period and come back on interaction.
 The page clock is frozen and advanced by hand, so a 5-minute timeout takes milliseconds to test."""
-from helpers import open_page, advance, la
+from helpers import go, open_page, advance, la
 
 START = la(2026, 10, 26, 8, 0, 0)
 IS_IDLE = "document.body.classList.contains('idle')"
@@ -32,28 +32,28 @@ def run(browser, r):
 
     # ---- the revealing tap must not press a hidden button ----
     pg.keyboard.press('Shift'); pg.wait_for_timeout(100)
-    box = pg.locator('#dock [data-go=settings]').bounding_box()
+    box = pg.locator('#dock [data-go=timer]').bounding_box()
     advance(pg, 5200); pg.wait_for_timeout(700)
     chk('(setup) hidden again before tapping', pg.evaluate(IS_IDLE))
     pg.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-    chk('tapping where "Settings" is only reveals the controls', not pg.evaluate(IS_IDLE) and pg.evaluate(SCREEN) == 'home', pg.evaluate(SCREEN))
+    chk('tapping where "Timer" is only reveals the controls', not pg.evaluate(IS_IDLE) and pg.evaluate(SCREEN) == 'home', pg.evaluate(SCREEN))
     advance(pg, 800)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('a second tap on the revealed button works', pg.evaluate(SCREEN) == 'settings')
     ctx.close()
 
     # ---- same thing with a real touchscreen (the kiosk): the tap must not press the button that appears ----
     ctx, pg = fresh(browser, r, touch=True)
-    box = pg.locator('#dock [data-go=settings]').bounding_box()
+    box = pg.locator('#dock [data-go=timer]').bounding_box()
     advance(pg, 5200); pg.wait_for_timeout(700)
     pg.touchscreen.tap(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
     pg.wait_for_timeout(100)
-    chk('touch: tapping where "Settings" is only reveals the controls (does not press it)',
+    chk('touch: tapping where "Timer" is only reveals the controls (does not press it)',
         not pg.evaluate(IS_IDLE) and pg.evaluate(SCREEN) == 'home', pg.evaluate(SCREEN))
     advance(pg, 800)
     pg.touchscreen.tap(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
     pg.wait_for_timeout(100)
-    chk('touch: the next tap on the visible button works', pg.evaluate(SCREEN) == 'settings', pg.evaluate(SCREEN))
+    chk('touch: the next tap on the visible button works', pg.evaluate(SCREEN) == 'timer', pg.evaluate(SCREEN))
     ctx.close()
 
     # ---- no flashing from background clock updates ----
@@ -100,11 +100,11 @@ def run(browser, r):
 
     # ---- other screens return to the clock; dialogs hold the countdown ----
     ctx, pg = fresh(browser, r)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     advance(pg, 10000); chk('a sub-screen does not vanish after only the home timeout', pg.evaluate(SCREEN) == 'settings')
     advance(pg, 21000); pg.wait_for_timeout(700)
     chk('after 30 s of inactivity a sub-screen returns to the clock with controls hidden', pg.evaluate(SCREEN) == 'home' and pg.evaluate(IS_IDLE))
-    pg.keyboard.press('Shift'); pg.click('#dock [data-go=settings]')
+    pg.keyboard.press('Shift'); go(pg, 'settings')
     pg.click('#reset'); advance(pg, 120000)
     chk('an open dialog is never auto-closed or navigated away from', pg.evaluate("document.getElementById('dlg').open") and pg.evaluate(SCREEN) == 'settings')
     pg.click('#no'); advance(pg, 31000)
@@ -113,12 +113,12 @@ def run(browser, r):
 
     # ---- configurable in Settings (and remembered) ----
     ctx, pg = fresh(browser, r)
-    pg.click('#dock [data-go=settings]'); pg.click('button:has-text("30 sec")')
+    go(pg, 'settings'); pg.click('button:has-text("30 sec")')
     chk('timeout choice is saved', pg.evaluate("Settings.get().idleSec") == 30 and pg.evaluate("JSON.parse(localStorage.getItem('luna.settings.v1')).idleSec") == 30)
     pg.click('.screen.on [data-go=home]'); advance(pg, 29000)
     chk('a 30 s timeout does not hide at 29 s', not pg.evaluate(IS_IDLE))
     advance(pg, 1500); chk('...and does at 30 s', pg.evaluate(IS_IDLE))
-    pg.keyboard.press('Shift'); pg.click('#dock [data-go=settings]'); pg.click('button:has-text("Never")')
+    pg.keyboard.press('Shift'); go(pg, 'settings'); pg.click('button:has-text("Never")')
     pg.click('.screen.on [data-go=home]'); advance(pg, 600000)
     chk('"Never" keeps the controls up', not pg.evaluate(IS_IDLE))
     pg.reload(); pg.wait_for_timeout(200)

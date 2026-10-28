@@ -1,6 +1,6 @@
 # Screen Time Timer
 
-A separate timer for limiting screen sessions. It has its own screen (**Screen Time** in the dock, or `/#screentime`),
+A separate timer for limiting screen sessions. It has its own screen (**Screen Time** on the home toolbar, or `/#screentime`),
 its own saved data, and its own rules. It is not the ordinary timer: the ordinary timer's buttons and voice
 commands cannot pause, stop or cancel it.
 

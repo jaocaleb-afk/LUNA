@@ -4,11 +4,17 @@
      "how much time is left?"                  -> {type:'timer.status', ask:'remaining', target:'any'}
      "cancel that timer"                       -> {type:'timer.cancel', target:'any'}
      "cancel the screen time timer"            -> {type:'timer.cancel', target:'screentime'}
+     "what is 12 plus 6 times 3?"              -> {type:'math', expression:'12 + 6 * 3'}
 
    Instead of one exact phrase per command, each command is recognised by its INTENT (a few keyword tests, in a
    fixed order), and durations are read by DurationParser, which understands hours, minutes and seconds together.
-   Leading "LUNA," and "please" are ignored, so "LUNA, please set a timer for 10 minutes" works. (This is not a
-   wake phrase: commands are only heard after Talk is tapped.) */
+   Leading "LUNA," / "Hey LUNA," and "please" are ignored, so "Hey LUNA, please set a timer for 10 minutes" works.
+   (This is not a wake phrase: commands are only heard after Talk is tapped.)
+
+   Failures say WHY, in `kind`, because voice answers them differently (see miss-counter.js):
+     unknown      not recognised as any command ("what's the weather")
+     unsupported  recognised, but LUNA does not do that by voice ("start screen time")
+     invalid      a supported command with a problem LUNA can ask about ("set a timer for 5" -> 5 what?) */
 const Parser = (() => {
   const SCREENS = ['home', 'timer', 'schedules', 'assistant', 'backgrounds', 'settings', 'screentime'];
 
@@ -29,7 +35,7 @@ const Parser = (() => {
   const FILLER = new Set(['the', 'my', 'that', 'this', 'it', 'a', 'current', 'timer', 'countdown', 'can', 'you', 'could',
     'would', 'will', 'now', 'screen', 'time', 'screentime', 'normal', 'ordinary', 'kitchen']);
 
-  const fail = (error) => ({ ok: false, error });
+  const fail = (error, kind = 'invalid') => ({ ok: false, error, kind });
   const succeed = (action) => ({ ok: true, action });
 
   function normalize(raw) {
@@ -38,7 +44,7 @@ const Parser = (() => {
       .replace(/[.,!?;:]/g, ' ')
       .replace(/\bturn off\b/g, 'stop')
       .replace(/\s+/g, ' ').trim()
-      .replace(/^(?:ok(?:ay)? |hi |hello )?luna\b ?/, '')
+      .replace(/^(?:ok(?:ay)? |hi |hello |hey )?luna\b ?/, '')
       .replace(/\bplease\b/g, ' ')
       .replace(/\s+/g, ' ').trim();
   }
@@ -81,7 +87,7 @@ const Parser = (() => {
     const wantsTimer = TIMER_WORD.test(text) || SET_VERB.test(text);
     if (!wantsTimer) return null;
     if (SCREEN_TIME.test(text)) {
-      return fail('Screen Time sessions are started with the Start button on the Screen Time screen.');
+      return fail('Screen Time sessions are started with the Start button on the Screen Time screen.', 'unsupported');
     }
     if (!DurationParser.mentions(text)) {
       return TIMER_WORD.test(text) && SET_VERB.test(text) ? fail(DurationParser.MESSAGES.missing) : null;
@@ -91,21 +97,29 @@ const Parser = (() => {
     return succeed({ type: 'timer.set', seconds: duration.seconds });
   }
 
+  /* "what is 25 plus 17", "calculate 144 divided by 12" (MathRequest decides; it never takes non-sums). */
+  function calculation(raw) {
+    const request = MathRequest.read(raw);
+    return request ? { type: 'math', expression: request.expression } : null;
+  }
+
   function parse(raw) {
     const text = normalize(raw);
-    if (!text) return fail('Type a command, for example “set a 5 minute timer”.');
+    if (!text) return fail('Type a command, for example “set a 5 minute timer”.', 'unknown');
 
     for (const intent of [navigation, timerStatus, clockQuestion, timerControl]) {
       const action = intent(text);
       if (action) return succeed(action);
     }
+    const math = calculation(raw);
+    if (math) return succeed(math);
     const set = timerSet(text, raw);
     if (set) return set;
 
     if (TIMER_WORD.test(text)) {
-      return fail('I couldn’t read that timer command. Try “set a 5 minute timer” or “how much time is left?”.');
+      return fail('I couldn’t read that timer command. Try “set a 5 minute timer” or “how much time is left?”.', 'unknown');
     }
-    return fail('Unsupported command: “' + text + '”.');
+    return fail('Unsupported command: “' + text + '”.', 'unknown');
   }
 
   return { parse, normalize };

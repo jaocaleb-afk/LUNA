@@ -14,7 +14,8 @@ const VoiceView = (() => {
   };
 
   const isActive = (state) => state === 'starting' || state === 'listening';
-  const talkLabel = (state) => state === 'listening' ? '■ Stop' : state === 'starting' ? '■ Cancel' : '🎤 Talk';
+  const talkLabel = (state) => state === 'listening' ? 'Stop' : state === 'starting' ? 'Cancel' : 'Talk';
+  const talkIcon = (state) => (isActive(state) ? 'stop' : 'mic');
 
   function renderHomeIndicator(ctx) {
     const state = ctx.voice.getState();
@@ -32,7 +33,8 @@ const VoiceView = (() => {
     const state = ctx.voice.getState();
     const talk = $('#talk');
     talk.hidden = !ctx.on;
-    setText(talk, talkLabel(state));
+    setText($('.lbl', talk), talkLabel(state));
+    Icons.set($('.ico', talk), talkIcon(state));
     talk.classList.toggle('live', isActive(state));
   }
 
@@ -48,7 +50,8 @@ const VoiceView = (() => {
 
     const row = H('div', { className: 'row' });
     if (on) {
-      row.append(H('button', { id: 'vtalk', className: 'btn vmic' + (isActive(state) ? ' live' : ''), textContent: talkLabel(state), onclick: actions.talk }));
+      row.append(H('button', { id: 'vtalk', className: 'btn vmic' + (isActive(state) ? ' live' : ''), onclick: actions.talk }, null,
+        Icons.make(talkIcon(state)), talkLabel(state)));
     } else {
       row.append(H('button', { className: 'btn pri', textContent: 'Set up voice…', onclick: () => Nav.go('settings') }));
     }

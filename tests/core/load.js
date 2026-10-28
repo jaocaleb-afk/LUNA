@@ -5,9 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const CORE_FILES = ['duration-parser', 'parser', 'timer-engine', 'schedule-time', 'schedule', 'scheduler', 'idle', 'voice-phrases', 'voice-session', 'pin', 'kiosk-gate', 'speech-output',
+const CORE_FILES = ['duration-parser', 'arithmetic', 'math-request', 'parser', 'timer-engine', 'schedule-time', 'schedule', 'scheduler', 'idle', 'voice-phrases', 'voice-session', 'pin', 'kiosk-gate', 'speech-text', 'speech-output', 'miss-counter',
   'screen-time-policy', 'screen-time-storage', 'screen-time-timer'];
-const NAMES = ['DurationParser', 'Parser', 'TimerEngine', 'createTimerEngine', 'ScheduleTime', 'Schedule', 'createScheduler', 'createIdle', 'VoicePhrases', 'VoiceCore', 'Pin', 'createKioskGate', 'SpeechOutput',
+const NAMES = ['DurationParser', 'Arithmetic', 'MathRequest', 'Parser', 'TimerEngine', 'createTimerEngine', 'ScheduleTime', 'Schedule', 'createScheduler', 'createIdle', 'VoicePhrases', 'VoiceCore', 'Pin', 'createKioskGate', 'SpeechText', 'SpeechOutput', 'MissCounter',
   'ScreenTimePolicy', 'ScreenTimeRecord', 'createScreenTimeTimer'];
 
 for (const f of CORE_FILES) {

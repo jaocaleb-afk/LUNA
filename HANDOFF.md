@@ -20,10 +20,17 @@ a **much more flexible command parser** (`js/core/duration-parser.js` reads "3 h
 words, halves; `js/core/parser.js` now works by intent and adds "how much time is left?"; `js/app/timer-replies.js`), and the
 **Screen Time Timer** (`js/core/screen-time-*.js`, `js/app/screen-time-*.js`, `css/screen-time.css`, full write-up in `docs/screen-time.md`).
 
+Fourth session: **compact controls** (home toolbar of 4 everyday buttons + Talk, the rest in a "More" menu: `js/app/dock-menu.js`;
+44 px touch targets via `--tap` in `css/luna.css`; inline-SVG icons `js/app/icons.js`; Settings as grouped one-line rows with segmented
+controls and a sticky section bar), **two-step replies to misunderstood voice commands** (`js/core/miss-counter.js`; parser failure
+`kind`s; the recogniser's no-match / low confidence), **more natural speech** (`js/core/speech-text.js` rewrites screen text for the ear;
+voice ranking prefers Natural/Neural/Enhanced/Piper/Google voices, waits for late voice lists, skips failing voices, a Voice picker in Settings),
+and **calculations** (`js/core/arithmetic.js`, a recursive-descent calculator with no eval; `js/core/math-request.js` for the wording).
+
 ## State
 
-- Unit tests: `node tests/run-core-tests.js` -> 136/136.
-- Browser tests: `python3 tests/run_ui_tests.py` -> 411/411 (third session), zero console errors (Playwright + Chromium, desktop Linux).
+- Unit tests: `node tests/run-core-tests.js` -> 171/171 (fourth session; 136 in the third).
+- Browser tests: `python3 tests/run_ui_tests.py` -> 485/485 (fourth session; 411 in the third), zero console errors (Playwright + Chromium, desktop Linux).
   Second session: 323/323, stable over 3 consecutive runs,
   and 323/323 against a real Caddy HTTPS server (`LUNA_URL=https://…:8443/index.html`) in the sandbox.
 - Old `core.js`/`app.js` were deleted. The original test files were replaced by `tests/core/*` and `tests/ui/*` (the original UI checks live on in `tests/ui/test_legacy.py`).
@@ -45,6 +52,13 @@ words, halves; `js/core/parser.js` now works by intent and adds "how much time i
 7. **Screen Time on the Pi.** The alarm uses WebAudio (headless Chromium reports it "playing"; nothing was heard). Check it is audible and
    annoying enough, that it starts after a reload during the alert once the screen is tapped (autoplay policy), and a real
    overnight run (midnight reset, Pi without RTC booting before NTP -> expect "Blocked" until the clock is right).
+8. **Compact controls on the real 7-inch panel.** Sizes were measured in headless Chromium (every control >= 44x44 CSS px at 800x480
+   and 480x800). Whether that feels right under a finger, and how the Pi's Chromium renders the SVG icons and the blurred menu, is unverified.
+9. **How natural the voice sounds.** Only the choice logic is tested (mock voice lists). Real voice names differ per device; check which
+   voice is picked on ChromeOS and on the Pi, and whether eSpeak at 0.9x is better or worse to your ear.
+10. **What Chrome's recogniser types for sums.** Tested forms: "25 plus 17", "25 + 17", "8 x 7", "8 * 7", "15%", "1,000", number words.
+    If Chrome writes a form LUNA does not read, the bubble shows the exact text; add it to `math-request.js` with a test.
+11. **Confidence and no-match on real Chrome.** The 0.3 confidence threshold and the "no-match" handling are tested with a mock only.
 
 ## Architecture in one minute
 
@@ -58,7 +72,7 @@ words, halves; `js/core/parser.js` now works by intent and adds "how much time i
 
 ## Behaviour decisions (deliberate; change only if the owner asks)
 
-- Home layout: `#clock` is `position:absolute; inset:0` and centered flex. Everything else (dock, timer badge, voice indicator) overlays it, so nothing can shift the clock. The AM/PM suffix is absolutely positioned so it does not skew centering.
+- Home layout: `#clock` is `position:absolute; inset:0` and centered flex. Everything else (toolbar `#dock`, timer badge, voice indicator) overlays it, so nothing can shift the clock. The AM/PM suffix is absolutely positioned so it does not skew centering.
 - Idle: dock fades after `idleSec` (default 10 s; 0 = never). Other screens return to the clock after `max(idleSec, 30 s)`. Open dialogs "hold" the countdown. `/#settings` etc. always work.
 - Schedules: device-local time only (the clock's display zone setting does NOT affect rules; a warning shows if they differ).
   - Only occurrences after `armedAt` count (set on create / edit / enable).
@@ -71,6 +85,15 @@ words, halves; `js/core/parser.js` now works by intent and adds "how much time i
 - A running timer is not persisted across page reload (also true of the original). Rules/settings/backgrounds are. The Screen Time session IS persisted.
 - Spoken replies: only for voice commands (not typed ones, not timer ticks). Newest reply cancels the previous one. Talk silences LUNA first.
   Same sentence on screen and aloud. Durations are read back in words ("3 hours, 2 minutes, and 19 seconds").
+- Misunderstood voice commands (`miss-counter.js`): kinds `unknown` (not recognised) and `unsupported` (recognised, not done by voice,
+  e.g. "start screen time") count as misses; `done` and `invalid` (a supported command LUNA asks about) reset. 1st miss "I didn't catch that.",
+  2nd "Sorry, that command isn't supported.", then reset. Silence is NOT a miss ("I didn't hear anything."). Typed commands keep detailed
+  messages. One id per Talk session; a repeated id is ignored.
+- Calculations: no eval; tokens limited to numbers, + - * / ( ) % and "of" (only after %). Unary minus binds tighter than * and /.
+  "N%" = N/100, "N% of X" = N/100*X. Results rounded to 4 dp, "≈"/"about" when rounded; |x| >= 1e15 refused; ÷0 explained.
+  A sentence is a sum only with a lead ("what is", "calculate"...) or if it is nothing but a sum, so timers never become sums.
+- Speech wording: replies are written once for the screen; `SpeechText.toSpeech` only changes how symbols/names are read.
+  Rate/pitch 1 except eSpeak (rate 0.9). First reply waits <= 1.5 s for the voice list. A failing voice is skipped and the reply retried once.
 - Parser: refuses rather than guesses (number without unit, repeated unit, range, "1:30", vague, negative, non-whole, >24 h).
   "LUNA, ..." and "please" are stripped (this is NOT a wake phrase). Control commands = one verb + filler words only.
 - Screen Time (see `docs/screen-time.md`): 20-min sessions; weekdays 4/day + 10-min gap after each END; weekends no cap,
@@ -90,6 +113,10 @@ words, halves; `js/core/parser.js` now works by intent and adds "how much time i
 - With a mouse, a click lands on the element under pointer-*down*, so "reveal tap must not press the button" only fails with **touch** events. `test_idle.py` has a touch case for this; keep it.
 - `tests/core/load.js` loads the core files with `vm.runInThisContext` (same realm, so `assert.deepStrictEqual` works on their objects). Add new core files to its `CORE_FILES`/`NAMES` **and** to `index.html`.
 - Core tests set `TZ=America/Los_Angeles` (in `harness.js`) so DST cases are deterministic.
+- Assistant, Backgrounds, Settings and Fullscreen are inside the More menu, hidden until it opens. In UI tests use `helpers.go(pg, 'settings')`
+  (opens More when needed) or `helpers.more(pg, '#fs')`; clicking `#dock [data-go=settings]` directly times out.
+- `#sjump` (the Settings section bar) must itself be the sticky element: `position:sticky` only sticks inside its parent's box.
+- Button labels with icons: set the text of the `.lbl` span (`#talk`, `#fs`), never the button's `textContent`, or the icon is wiped.
 
 ## How the tests were validated (repeat when changing behaviour)
 
@@ -107,6 +134,12 @@ of midnight; no weekend pair rule; clock-back ignored; corrupt data -> fresh all
 reload restarts at 20:00; session starts although not saved; clock set back lengthens the session; sleep not caught up; Dismiss refunds;
 countdown by counting ticks; Start always shown; Dismiss does not stop the alarm; alarm loops stack; alarm obeys Timer sound;
 Escape dismisses; "cancel that timer" ignores Screen Time; confirmation as M:SS; Restore defaults wipes Screen Time.
+Fourth session (28, all caught): ÷0 not caught; unary minus ignored; % not /100; + at × precedence; unknown characters skipped;
+any sentence with numbers taken as a sum; rounded answers shown as exact; miss count not reset after the 2nd reply / after a success;
+duplicate ids counted twice; unknown commands treated as understood; generic reply not used; low-confidence guess run; no-match as error;
+no natural-voice preference; no wait for a late voice list; failing voice not skipped; eSpeak rate unchanged; screen text spoken raw;
+"LUNA" spelled out; chosen voice ignored; "Hey LUNA" prefix not stripped; menu not closed by Esc / tap elsewhere / idle; 36 px targets;
+toolbar back on two rows; aria-pressed missing on settings.
 
 ## Suggested next steps
 

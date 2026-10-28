@@ -39,7 +39,7 @@ const DurationParser = (() => {
     missing: 'How long should the timer be? For example, “set a timer for 10 minutes”.',
     'no-unit': 'I heard a number without a unit. Say hours, minutes or seconds, for example “5 minutes and 30 seconds”.',
     'no-number': 'I heard a unit but not how many. For example, “set a timer for 10 minutes”.',
-    'repeated-unit': 'I heard the same unit twice, so I am not sure how long you mean. Say each unit once.',
+    'repeated-unit': 'I heard the same unit twice, so I’m not sure how long you mean. Say each unit once.',
     range: 'Please give one duration, not a range.',
     colon: 'I can’t tell whether that means minutes or hours. Say the units, for example “1 minute 30 seconds”.',
     vague: 'Please say an exact duration, for example “3 minutes”.',

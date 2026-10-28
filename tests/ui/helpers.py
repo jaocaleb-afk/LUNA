@@ -144,8 +144,19 @@ def js(page, expression):
 
 
 def go(page, screen):
-    """Navigate by clicking the dock button, like a person would (dock must be visible)."""
-    page.click('#dock [data-go=%s]' % screen)
+    """Navigate by tapping the home toolbar, like a person would (the toolbar must be visible).
+    Assistant, Backgrounds and Settings are in the toolbar's More menu, so that is opened first."""
+    target = '#dock [data-go=%s]' % screen
+    if not page.is_visible(target):
+        page.click('#more')
+    page.click(target)
+
+
+def more(page, selector):
+    """Tap an item in the toolbar's More menu (e.g. '#fs')."""
+    if not page.is_visible(selector):
+        page.click('#more')
+    page.click(selector)
 
 
 def rects_equal(a, b, tol=0.01):

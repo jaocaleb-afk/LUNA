@@ -29,6 +29,7 @@ const Idle = (() => {
     onIdle() {
       if (Nav.cur !== 'home') { Nav.go('home', { silent: true }); TimerUI.render(); }
       document.body.classList.add('idle');
+      DockMenu.close();
       const focused = document.activeElement;
       if (focused && focused.closest('#dock')) focused.blur();
     },

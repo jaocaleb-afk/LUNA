@@ -131,7 +131,7 @@ test('voice: silence times out with a message and closes the microphone', () => 
   a.deepStrictEqual(x.ran, []);
 });
 
-test('voice: "no-speech" from the browser ends quietly with "didn’t catch" (not an error)', () => {
+test('voice: "no-speech" from the browser ends quietly with "I didn’t hear anything" (not an error)', () => {
   const x = makeVoice();
   x.voice.listen();
   x.rec().audio();
@@ -234,4 +234,44 @@ test('voice: a failing command action is reported, not thrown', () => {
   const cmd = x.events.find((e) => e.type === 'command');
   a.ok(!cmd.ok && /failed/.test(cmd.msg));
   a.strictEqual(x.voice.getState(), 'idle');
+});
+
+/* ---------- not understood: never acted on, reported once, with an id ---------- */
+test('voice: each command carries the id of its Talk session, and a session reports only one command', () => {
+  const x = makeVoice();
+  x.voice.listen(); x.rec().audio(); x.rec().say([['open settings', true]]);
+  x.rec && x.rec().say([['open settings', true]]);           // a duplicate callback from the browser
+  x.voice.listen(); x.rec().audio(); x.rec().say([['set a 5 minute timer', true]]);
+  const commands = x.events.filter((e) => e.type === 'command');
+  a.deepStrictEqual(commands.map((c) => c.id), [1, 2]);
+  a.deepStrictEqual(x.ran, ['open settings', 'set a 5 minute timer']);
+  a.strictEqual(commands[0].kind, 'done');
+});
+
+test('voice: the browser\'s "no-match" (speech it could not turn into words) is reported as unclear, not an error', () => {
+  const x = makeVoice();
+  x.voice.listen(); x.rec().audio(); x.rec().err('no-match');
+  const command = x.events.find((e) => e.type === 'command');
+  a.ok(command && command.kind === 'unclear' && !command.ok && command.text === '');
+  a.deepStrictEqual(x.ran, [], 'nothing is run');
+  a.strictEqual(x.voice.getState(), 'idle');
+  a.strictEqual(x.voice.getError(), null);
+  a.ok(!x.events.some((e) => e.type === 'timeout' || e.type === 'error'));
+});
+
+test('voice: a final result the browser marks as very unsure is not acted on; unknown confidence (0) is used', () => {
+  const x = makeVoice();
+  x.voice.listen(); x.rec().audio();
+  x.rec().onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'cancel the timer', confidence: 0.12 }], { isFinal: true })] });
+  a.deepStrictEqual(x.ran, [], 'a low-confidence guess never cancels anything');
+  a.strictEqual(x.events.find((e) => e.type === 'command').kind, 'unclear');
+  x.voice.listen(); x.rec().audio();
+  x.rec().onresult({ resultIndex: 0, results: [Object.assign([{ transcript: 'open settings', confidence: 0 }], { isFinal: true })] });
+  a.deepStrictEqual(x.ran, ['open settings']);
+});
+
+test('voice: the kind reported by run() is passed on (unknown commands stay unknown)', () => {
+  const x = makeVoice({ run: () => ({ ok: false, msg: 'Unsupported command.', kind: 'unknown' }) });
+  x.voice.listen(); x.rec().audio(); x.rec().say([['sing a song', true]]);
+  a.strictEqual(x.events.find((e) => e.type === 'command').kind, 'unknown');
 });

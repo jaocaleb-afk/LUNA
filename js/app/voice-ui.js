@@ -11,7 +11,11 @@
    so a page load never opens the microphone or shows a permission prompt.
 
    Replies: the answer to a voice command is shown in the bubble AND spoken by Speech (speech.js, text-to-speech),
-   if spoken replies are on. Tapping Talk silences any reply first, so LUNA never talks over the person. */
+   if spoken replies are on. Tapping Talk silences any reply first, so LUNA never talks over the person.
+
+   Misunderstood voice commands (not recognised, not supported, or not heard clearly) get a short reply that changes
+   on the second miss in a row (MissCounter, core/miss-counter.js). Typed commands keep their detailed messages,
+   because there the person can read them. */
 const VoiceUI = (() => {
   const CONSENT_KEY = 'luna.voice.consent.v1';
   const MAX_LOG = 5;
@@ -22,6 +26,8 @@ const VoiceUI = (() => {
   let bubbleTimer = 0;
   let logs = [];
   let mic = 'unknown';   // browser microphone permission, as last reported
+  const misses = MissCounter.create();
+  const UNDERSTOOD = ['done', 'invalid'];   // ran, or LUNA asked a specific question about it
 
   const isOn = () => Settings.get().voiceOn;
 
@@ -46,9 +52,11 @@ const VoiceUI = (() => {
     } else if (e.type === 'heard') {
       showBubble([quoted(e.text), e.final ? ' …' : '…'], '', e.final ? 4000 : 9000);
     } else if (e.type === 'command') {
-      showBubble([quoted(e.text), ' → ' + e.msg], e.ok ? '' : 'err', 9000);
-      Speech.say(e.msg);
-      logs.unshift({ ok: e.ok, text: '“' + e.text + '” → ' + e.msg });
+      const miss = misses.record(e.id, UNDERSTOOD.includes(e.kind));
+      const msg = miss.reply || e.msg;
+      showBubble(e.text ? [quoted(e.text), ' → ' + msg] : [msg], e.ok ? '' : 'err', 9000);
+      Speech.say(msg);
+      logs.unshift({ ok: e.ok, text: (e.text ? '“' + e.text + '” → ' : '') + msg });
       logs.length = Math.min(logs.length, MAX_LOG);
       render();
     } else if (e.type === 'timeout') {

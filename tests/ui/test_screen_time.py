@@ -2,7 +2,7 @@
 Checks the controls offered, the weekday and weekend rules, reloads, the alert and alarm, corrupt data,
 and independence from the ordinary timer and its voice/typed commands."""
 import json
-from helpers import open_page, la, advance, jump
+from helpers import go, open_page, la, advance, jump
 
 SETTINGS = {'idleSec': 0}
 MIN = 60000
@@ -12,7 +12,7 @@ FORBIDDEN = ('pause', 'stop', 'cancel', 'reset', 'restart', 'override', 'skip', 
 
 def page(browser, r, clock, storage=None, settings=SETTINGS):
     ctx, pg = open_page(browser, r, settings=settings, storage=storage, clock=clock, label='screen-time')
-    pg.click('#dock [data-go=screentime]')
+    go(pg, 'screentime')
     return ctx, pg
 
 
@@ -77,7 +77,7 @@ def weekday(browser, r):
     chk('...as are pause, reset and stop; the session keeps running', pg.evaluate("ScreenTimeUI.view().state") == 'running' and text(pg, '#stbt') == '8:00')
 
     # ---- the ordinary timer is independent ----
-    pg.click('#dock [data-go=timer]'); pg.click('[data-m="2"]'); pg.click('#tctl [data-act=start]')
+    go(pg, 'timer'); pg.click('[data-m="2"]'); pg.click('#tctl [data-act=start]')
     pg.click('#tctl [data-act=pause]'); pg.click('#tctl [data-act=reset]'); pg.click('#tctl [data-act=cancel]')
     chk('the ordinary timer\'s Pause/Reset/Cancel buttons do not touch Screen Time', pg.evaluate("ScreenTimeUI.view().state") == 'running' and pg.evaluate("TimerEngine.snapshot().state") == 'idle')
     typed(pg, 'set a 3 minute timer')
@@ -87,7 +87,7 @@ def weekday(browser, r):
 
     # ---- reload ----
     pg.reload(); pg.wait_for_timeout(200)
-    pg.click('#dock [data-go=screentime]')
+    go(pg, 'screentime')
     chk('a reload does not restart the countdown or offer a new session', state(pg) == 'Running' and text(pg, '#std') == '8:00' and not pg.is_visible('#ststart'), text(pg, '#std'))
 
     # ---- expiry: alert and alarm until Dismiss ----
@@ -110,7 +110,7 @@ def weekday(browser, r):
     bursts = pg.evaluate("ScreenTimeAlarm.bursts()")
     advance(pg, 3000)
     chk('Dismiss stops the alarm immediately and hides the alert', not pg.is_visible('#stalert') and not pg.evaluate("ScreenTimeAlarm.isRunning()") and pg.evaluate("ScreenTimeAlarm.bursts()") == bursts)
-    pg.click('#dock [data-go=screentime]')
+    go(pg, 'screentime')
     chk('dismissing did not refund the session: 1 of 4 used', '1 of 4 sessions used' in text(pg, '#stused'), text(pg, '#stused'))
     ctx.close()
 
@@ -149,7 +149,7 @@ def weekday_limit_and_midnight(browser, r):
     chk('...the fifth session cannot be started (no Start button; start() refuses)', not pg.is_visible('#ststart') and
         pg.evaluate("ScreenTimeUI.view().canStart") is False)
     pg.reload(); pg.wait_for_timeout(200)
-    pg.click('#dock [data-go=screentime]')
+    go(pg, 'screentime')
     chk('...a reload does not grant a new session', state(pg) == 'Daily Limit Reached')
     advance(pg, la(2026, 10, 28, 0, 0, 0).timestamp() * 1000 - pg.evaluate("Date.now()") - 1000)
     chk('...still blocked at 11:59:59 PM', state(pg) == 'Daily Limit Reached')
@@ -180,7 +180,7 @@ def weekend(browser, r):
     chk('after two back-to-back sessions: Cooldown until 10:50 AM, explained',
         state(pg) == 'Cooldown' and 'back-to-back' in text(pg, '#stwhy') and '10:50 AM' in text(pg, '#stwhy'), text(pg, '#stwhy'))
     pg.reload(); pg.wait_for_timeout(200)
-    pg.click('#dock [data-go=screentime]')
+    go(pg, 'screentime')
     chk('...a reload keeps the weekend tracking', state(pg) == 'Cooldown' and text(pg, '#std') == '10:00', (state(pg), text(pg, '#std')))
     advance(pg, 10 * MIN - 1000)
     chk('...still in cooldown at 10:49:59', state(pg) == 'Cooldown')
@@ -197,7 +197,7 @@ def integrity(browser, r):
     saved = json.loads(pg.evaluate("localStorage.getItem('%s')" % KEY))
     chk('the record holds only the documented fields', set(saved) == {'v', 'sessions', 'lockedUntil', 'lockReason'} and
         set(saved['sessions'][0]) == {'start', 'end', 'dismissed'} and saved['sessions'][0]['end'] - saved['sessions'][0]['start'] == 20 * MIN, saved)
-    pg.click('.screen.on [data-go=home]'); pg.click('#dock [data-go=settings]')
+    pg.click('.screen.on [data-go=home]'); go(pg, 'settings')
     pg.click('#reset'); pg.click('#yes')
     chk('Restore defaults keeps the Screen Time history', json.loads(pg.evaluate("localStorage.getItem('%s')" % KEY)) == saved and
         pg.evaluate("ScreenTimeUI.view().state") == 'running')
@@ -214,6 +214,6 @@ def integrity(browser, r):
     # Storage that refuses writes: the session must not start (it could not be enforced after a reload)
     block = "(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === '%s') throw new Error('QuotaExceededError'); return set.call(this, k, v); }; })();" % KEY
     ctx, pg = open_page(browser, r, settings=SETTINGS, clock=la(2026, 10, 26, 9, 0, 0), scripts=[block], label='screen-time')
-    pg.click('#dock [data-go=screentime]'); pg.click('#ststart')
+    go(pg, 'screentime'); pg.click('#ststart')
     chk('if the browser will not save, no session starts and the reason is shown', state(pg) == 'Ready' and 'did not save' in text(pg, '#toast'), text(pg, '#toast'))
     ctx.close()

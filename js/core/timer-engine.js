@@ -61,7 +61,7 @@ function createTimerEngine(env) {
       if (!Number.isFinite(ms) || ms < 1000) return rejected('Enter a duration of at least 1 second.');
       if (ms > 864e5) return rejected('Timers can be up to 24 hours.');
       if (state === 'running' || state === 'paused') {
-        return rejected('A timer is already active. Cancel or reset it first.');
+        return rejected('A timer is already running. Cancel or reset it first.');
       }
       duration = remaining = Math.round(ms);
       deadline = now() + remaining;
@@ -83,7 +83,7 @@ function createTimerEngine(env) {
     },
 
     resume() {
-      if (state !== 'paused') return rejected('No paused timer to resume.');
+      if (state !== 'paused') return rejected('There’s no paused timer to resume.');
       deadline = now() + remaining;
       state = 'running';
       scheduleTick();
@@ -92,7 +92,7 @@ function createTimerEngine(env) {
     },
 
     reset() {
-      if (!duration) return rejected('No timer to reset.');
+      if (!duration) return rejected('There’s no timer to reset.');
       cancelLater(handle);
       state = 'ready';
       remaining = duration;
@@ -101,7 +101,7 @@ function createTimerEngine(env) {
     },
 
     cancel() {
-      if (state === 'idle') return rejected('No timer to cancel.');
+      if (state === 'idle') return rejected('There’s no timer to cancel.');
       cancelLater(handle);
       state = 'idle';
       duration = remaining = 0;

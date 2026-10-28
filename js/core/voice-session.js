@@ -10,10 +10,18 @@
      listening  audio is flowing; waiting for the command (only after the browser says audio really started)
      error      something failed; env.emit gets an explanation
 
-   env = {ctor, secure, lang(), emit(evt), run(text)->{ok,msg}, setTimeout?, clearTimeout?, listenMs?}
-   Events emitted: {type:'state'|'heard'|'command'|'timeout'|'error', ...} */
+   Not understood: the browser's "no-match" (it heard speech but could not turn it into words), or a final
+   transcript whose confidence the browser reports as very low, is NOT run. It is reported as a command with
+   kind 'unclear', so the person hears "I didn't catch that" instead of LUNA acting on a guess.
+   (Many engines report confidence 0 or nothing at all; that means "unknown", not "low", and the text is used.)
+
+   env = {ctor, secure, lang(), emit(evt), run(text)->{ok,msg,kind}, setTimeout?, clearTimeout?, listenMs?}
+   Events emitted: {type:'state'|'heard'|'command'|'timeout'|'error', ...}
+     command: {type:'command', id, text, ok, msg, kind}   id = which Talk session (one command per session) */
 const VoiceCore = (() => {
   const LISTEN_WINDOW_MS = 8000;  // how long to wait for a command once audio has started
+  const MIN_CONFIDENCE = 0.3;      // below this (and above 0), the browser itself is unsure what was said
+  const NOTHING_HEARD = 'I didn’t hear anything.';
 
   function createVoice(env) {
     const later = env.setTimeout || ((fn, ms) => setTimeout(fn, ms));
@@ -24,6 +32,7 @@ const VoiceCore = (() => {
     let rec = null;            // the live recogniser, or null
     let windowTimer = null;
     let handled = false;       // has this session already run its command?
+    let sessionId = 0;         // increases with every Talk; sent with the command so it is never counted twice
     let lastError = null;
 
     const emit = (evt) => { try { env.emit(evt); } catch (e) { console.error(e); } };
@@ -64,7 +73,7 @@ const VoiceCore = (() => {
 
     function nothingHeard() {
       teardown();
-      emit({ type: 'timeout', msg: 'I didn’t catch a command.' });
+      emit({ type: 'timeout', msg: NOTHING_HEARD });
       setState('idle');
     }
 
@@ -75,19 +84,26 @@ const VoiceCore = (() => {
       windowTimer = later(() => { windowTimer = null; if (!handled) nothingHeard(); }, listenWindow);
     }
 
-    function finishCommand(text) {
+    const unsure = (confidence) => typeof confidence === 'number' && confidence > 0 && confidence < MIN_CONFIDENCE;
+
+    function finishCommand(text, confidence) {
       handled = true;
       cancelLater(windowTimer);
       windowTimer = null;
       let result;
-      try { result = env.run(text); } catch (e) { result = { ok: false, msg: 'That action failed.' }; }
-      emit({ type: 'command', text, ok: !!result.ok, msg: result.msg });
+      if (!text || unsure(confidence)) {
+        result = { ok: false, msg: '', kind: 'unclear' };          // do not act on a guess
+      } else {
+        try { result = env.run(text); } catch (e) { result = { ok: false, msg: 'That action failed.', kind: 'invalid' }; }
+      }
+      emit({ type: 'command', id: sessionId, text, ok: !!result.ok, msg: result.msg, kind: result.kind || (result.ok ? 'done' : 'invalid') });
       if (rec) { try { rec.stop(); } catch (e) { teardown(); setState('idle'); } } // graceful: onend -> idle
     }
 
     function onError(code) {
       if (code === 'aborted') return;                  // we aborted it ourselves
       if (code === 'no-speech') { nothingHeard(); return; }
+      if (code === 'no-match') { if (!handled) finishCommand('', null); return; }   // speech, but no words
       fail(code || 'unknown');
     }
 
@@ -97,7 +113,7 @@ const VoiceCore = (() => {
       windowTimer = null;
       rec = null;
       if (!wasListening) return;
-      if (!handled) emit({ type: 'timeout', msg: 'I didn’t catch a command.' });
+      if (!handled) emit({ type: 'timeout', msg: NOTHING_HEARD });
       setState('idle');
     }
 
@@ -111,7 +127,7 @@ const VoiceCore = (() => {
           const text = ((result[0] && result[0].transcript) || '').trim();
           if (!text) continue;
           emit({ type: 'heard', text, final: !!result.isFinal });
-          if (result.isFinal) { finishCommand(text); return; }
+          if (result.isFinal) { finishCommand(text, result[0].confidence); return; }
         }
       };
       r.onerror = (e) => { if (r === rec) onError(e && e.error); };
@@ -132,6 +148,7 @@ const VoiceCore = (() => {
         if (rec) return { ok: true };                  // already starting or listening
         lastError = null;
         handled = false;
+        sessionId += 1;
         const r = new env.ctor();
         r.lang = env.lang ? env.lang() : 'en-US';
         r.continuous = false;

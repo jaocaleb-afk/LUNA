@@ -15,29 +15,38 @@
   <div id="vbubble" role="status" aria-live="polite" hidden></div>
  </div>
  <div id="vind" role="status" hidden></div>
+ <!-- Home toolbar: everyday controls first; the rest are in the "More" menu (js/app/dock-menu.js). -->
  <nav id="dock" aria-label="Main controls">
-  <button class="btn" data-go="timer">Timer</button>
-  <button class="btn" data-go="screentime">Screen Time</button>
-  <button class="btn" data-go="schedules">Schedules</button>
-  <button class="btn" data-go="assistant">Assistant</button>
-  <button class="btn" data-go="backgrounds">Backgrounds</button>
-  <button class="btn" data-go="settings">Settings</button>
-  <button class="btn" id="fs" hidden>Fullscreen</button>
-  <button class="btn pri" id="talk" hidden>🎤 Talk</button>
+  <button class="btn" data-go="timer"><span class="ico" data-icon="timer"></span>Timer</button>
+  <button class="btn" data-go="screentime"><span class="ico" data-icon="hourglass"></span>Screen Time</button>
+  <button class="btn" data-go="schedules"><span class="ico" data-icon="calendar"></span>Schedules</button>
+  <div class="more">
+   <button class="btn" id="more" aria-expanded="false" aria-controls="moremenu"><span class="ico" data-icon="more"></span>More</button>
+   <div id="moremenu" class="menu" role="group" aria-label="More controls" hidden>
+    <button class="btn" data-go="assistant"><span class="ico" data-icon="chat"></span>Assistant</button>
+    <button class="btn" data-go="backgrounds"><span class="ico" data-icon="image"></span>Backgrounds</button>
+    <button class="btn" data-go="settings"><span class="ico" data-icon="settings"></span>Settings</button>
+    <button class="btn" id="fs" hidden><span class="ico" data-icon="expand"></span><span class="lbl">Fullscreen</span></button>
+   </div>
+  </div>
+  <button class="btn pri" id="talk" hidden><span class="ico" data-icon="mic"></span><span class="lbl">Talk</span></button>
  </nav>
 </main>
 
 <section class="screen" data-screen="timer">
- <div class="top"><button class="btn" data-go="home">Home</button><h2>Timer</h2><button class="btn push" data-go="schedules">Schedules</button></div>
+ <div class="top"><button class="btn" data-go="home"><span class="ico" data-icon="back"></span>Home</button><h2>Timer</h2><button class="btn push" data-go="schedules"><span class="ico" data-icon="calendar"></span>Schedules</button></div>
  <div id="td" role="timer" aria-live="off">0:00</div><div id="tst"></div><div id="tsrc"></div>
  <div class="row ctr" id="presets"><button class="btn" data-m="1">1 min</button><button class="btn" data-m="2">2 min</button><button class="btn" data-m="5">5 min</button><button class="btn" data-m="10">10 min</button><button class="btn" data-m="15">15 min</button><button class="btn" data-m="30">30 min</button></div>
- <div class="row ctr" id="tin"><input id="tm" type="number" inputmode="numeric" min="0" max="1439" value="0" aria-label="Minutes"><span>min</span><input id="ts" type="number" inputmode="numeric" min="0" max="59" value="0" aria-label="Seconds"><span>sec</span></div>
- <div class="row ctr" id="tctl"></div>
+ <!-- Custom duration and the timer's own buttons share one line when there is room. -->
+ <div class="row ctr tline">
+  <div class="row" id="tin"><input id="tm" type="number" inputmode="numeric" min="0" max="1439" value="0" aria-label="Minutes"><span>min</span><input id="ts" type="number" inputmode="numeric" min="0" max="59" value="0" aria-label="Seconds"><span>sec</span></div>
+  <div class="row" id="tctl"></div>
+ </div>
  <div class="card mut" id="tnext"></div>
 </section>
 
 <section class="screen" data-screen="screentime">
- <div class="top"><button class="btn" data-go="home">Home</button><h2>Screen Time Timer</h2></div>
+ <div class="top"><button class="btn" data-go="home"><span class="ico" data-icon="back"></span>Home</button><h2>Screen Time Timer</h2></div>
  <!-- Drawn by js/app/screen-time-ui.js. Only two buttons ever: Start (when allowed) and Dismiss (on the alert). -->
  <div id="stmode"></div>
  <div id="stst" role="status"></div>
@@ -49,7 +58,7 @@
 </section>
 
 <section class="screen" data-screen="schedules">
- <div class="top"><button class="btn" data-go="home">Home</button><h2>Schedules</h2><button class="btn push" data-go="timer">Timer</button><button class="btn pri" id="rnew">New rule</button></div>
+ <div class="top"><button class="btn" data-go="home"><span class="ico" data-icon="back"></span>Home</button><h2>Schedules</h2><button class="btn push" data-go="timer"><span class="ico" data-icon="timer"></span>Timer</button><button class="btn pri" id="rnew"><span class="ico" data-icon="plus"></span>New rule</button></div>
  <div class="card mut" id="rinfo">
   <b>Schedules start a timer for you at a set time.</b> They use this device’s local time zone <span id="rtz"></span>.
   They only run while this LUNA page is open and the device is awake — nothing runs if the browser is closed or the device is off or asleep.
@@ -62,25 +71,26 @@
 </section>
 
 <section class="screen" data-screen="assistant">
- <div class="top"><button class="btn" data-go="home">Home</button><h2>Assistant</h2></div>
+ <div class="top"><button class="btn" data-go="home"><span class="ico" data-icon="back"></span>Home</button><h2>Assistant</h2></div>
  <div class="card" id="vcard"></div>
  <div class="card" data-cmd></div>
 </section>
 
 <section class="screen" data-screen="backgrounds">
- <div class="top"><button class="btn" id="bgback">Home</button><h2>Backgrounds</h2><button class="btn" id="bgnew">New</button></div>
+ <div class="top"><button class="btn" id="bgback"><span class="ico" data-icon="back"></span>Home</button><h2>Backgrounds</h2><button class="btn" id="bgnew">New</button></div>
  <div class="lib" id="lib"></div>
  <div class="ed" id="ed"></div>
 </section>
 
 <section class="screen" data-screen="settings">
- <div class="top"><button class="btn" data-go="home">Home</button><h2>Settings</h2></div>
+ <div class="top"><button class="btn" data-go="home"><span class="ico" data-icon="back"></span>Home</button><h2>Settings</h2></div>
+ <div id="sjump"></div>
  <div id="sets"></div>
  <div class="card" id="vset"></div>
  <div class="card" id="sset"></div>
  <div class="card" id="kset"></div>
  <div class="card" id="pinset"></div>
- <div class="card"><h3>Test a command</h3><div data-cmd></div></div>
+ <div class="card" id="cmdtest"><h3>Test a command</h3><div data-cmd></div></div>
  <div class="card"><button class="btn" id="reset">Restore defaults</button></div>
 </section>
 
@@ -100,6 +110,8 @@
  </div>
 </div>
 <script src="js/core/duration-parser.js"></script>
+<script src="js/core/arithmetic.js"></script>
+<script src="js/core/math-request.js"></script>
 <script src="js/core/parser.js"></script>
 <script src="js/core/timer-engine.js"></script>
 <script src="js/core/schedule-time.js"></script>
@@ -110,11 +122,14 @@
 <script src="js/core/voice-session.js"></script>
 <script src="js/core/pin.js"></script>
 <script src="js/core/kiosk-gate.js"></script>
+<script src="js/core/speech-text.js"></script>
 <script src="js/core/speech-output.js"></script>
+<script src="js/core/miss-counter.js"></script>
 <script src="js/core/screen-time-policy.js"></script>
 <script src="js/core/screen-time-storage.js"></script>
 <script src="js/core/screen-time-timer.js"></script>
 <script src="js/app/util.js"></script>
+<script src="js/app/icons.js"></script>
 <script src="js/app/settings.js"></script>
 <script src="js/app/nav.js"></script>
 <script src="js/app/clock.js"></script>
@@ -132,6 +147,7 @@
 <script src="js/app/schedule-editor.js"></script>
 <script src="js/app/schedule-ui.js"></script>
 <script src="js/app/idle-ui.js"></script>
+<script src="js/app/dock-menu.js"></script>
 <script src="js/app/voice-text.js"></script>
 <script src="js/app/voice-view.js"></script>
 <script src="js/app/speech.js"></script>

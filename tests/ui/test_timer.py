@@ -1,5 +1,5 @@
 """Timer screen: every control, the remaining-time display, source labelling, and the finish alert."""
-from helpers import open_page, advance, la
+from helpers import go, open_page, advance, la
 
 START = la(2026, 10, 26, 8, 0, 0)
 
@@ -12,7 +12,7 @@ def run(browser, r):
     r.group = 'timer: '
     chk = r.check
     ctx, pg = open_page(browser, r, clock=START, settings={'idleSec': 0}, label='timer')
-    pg.click('#dock [data-go=timer]')
+    go(pg, 'timer')
 
     chk('idle: only Start is offered, with the duration inputs', buttons(pg) == ['start'] and pg.is_visible('#tin') and pg.is_visible('#presets'))
     pg.click('[data-m="2"]')
@@ -61,7 +61,7 @@ def run(browser, r):
     chk('Dismiss hides the alert and leaves the timer ready to repeat', not pg.is_visible('#alarm') and pg.inner_text('#tst') == 'Ready')
 
     # ---- a spoken/typed command shows the same state ----
-    pg.click('.screen.on [data-go=home]'); pg.click('#dock [data-go=assistant]')
+    pg.click('.screen.on [data-go=home]'); go(pg, 'assistant')
     pg.fill('.cmd input', 'set a two minute timer'); pg.keyboard.press('Enter')
     chk('a typed command with a number word starts a 2:00 timer', pg.evaluate("TimerEngine.snapshot().duration") == 120000)
     ctx.close()

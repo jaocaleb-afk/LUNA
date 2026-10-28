@@ -4,7 +4,7 @@ Uses headless Chromium's REAL Fullscreen API (clicks give the user gesture it ne
 the browser's own exit control: Esc / the "exit fullscreen" button are handled by the browser, outside the page. As a
 stand-in, `document.exitFullscreen()` is called from a script: the page sees exactly the same `fullscreenchange` event,
 but this does NOT prove the real browser control behaves the same. That needs the manual check in README.md."""
-from helpers import open_page, la, advance, MOCK_SPEECH, NO_FULLSCREEN, create_rule_via_ui
+from helpers import go, more, open_page, la, advance, MOCK_SPEECH, NO_FULLSCREEN, create_rule_via_ui
 
 SETTINGS = {'idleSec': 0}
 PIN = '2580'
@@ -20,7 +20,7 @@ def with_pin(pg, pin=PIN):
 
 
 def enter(pg):
-    pg.click('#fs'); pg.wait_for_function(IN_KIOSK)
+    more(pg, '#fs'); pg.wait_for_function(IN_KIOSK)
 
 
 def type_pin(pg, pin, keypad=False):
@@ -53,12 +53,14 @@ def app_exit(browser, r):
     chk = r.check
     ctx, pg = page(browser, r)
     with_pin(pg)
-    chk('a Fullscreen button is on the dock', pg.is_visible('#fs') and pg.inner_text('#fs') == 'Fullscreen')
+    pg.click('#more')
+    chk('a Fullscreen button is in the toolbar\'s More menu', pg.is_visible('#fs') and pg.inner_text('#fs') == 'Fullscreen')
+    pg.click('#more')
     enter(pg)
     chk('tapping it enters real fullscreen kiosk mode', pg.evaluate(FS) and pg.evaluate(MODE) == 'kiosk' and pg.inner_text('#fs') == 'Exit fullscreen')
     chk('...and kiosk mode is remembered (for reloads)', pg.evaluate("localStorage.getItem('luna.kiosk.v1')") == 'true')
 
-    pg.click('#fs')
+    more(pg, '#fs')
     chk('LUNA’s Exit control asks for the PIN and stays fullscreen', pg.evaluate(GATE_UP) and pg.evaluate(FS) and 'Enter the PIN' in pg.inner_text('#gt'))
     chk('...the app behind the prompt is inert (not clickable or focusable)', pg.evaluate("document.getElementById('home').inert && document.querySelector('[data-screen=settings]').inert"))
     chk('...the PIN box has keyboard focus', pg.evaluate("document.activeElement.id") == 'gpin')
@@ -68,7 +70,7 @@ def app_exit(browser, r):
     chk('Cancel keeps LUNA in fullscreen and closes the prompt', not pg.evaluate(GATE_UP) and pg.evaluate(FS) and pg.evaluate(MODE) == 'kiosk')
     chk('...and the app is usable again', not pg.evaluate("document.getElementById('home').inert"))
 
-    pg.click('#fs')
+    more(pg, '#fs')
     type_pin(pg, '1111', keypad=True)
     chk('a wrong PIN (on-screen keypad) keeps the prompt, explains, and stays fullscreen',
         pg.evaluate(GATE_UP) and pg.evaluate(FS) and 'Wrong PIN' in pg.inner_text('#gerr'), pg.inner_text('#gerr'))
@@ -131,7 +133,7 @@ def idle_while_prompting(browser, r):
     ctx, pg = page(browser, r, settings={'idleSec': 5}, clock=la(2026, 10, 26, 8, 0, 0))
     with_pin(pg); pg.wait_for_timeout(1500)
     enter(pg)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     pg.click('#kbtn'); pg.wait_for_function(GATE_UP)
     advance(pg, 120000)
     pg.click('#gcancel')
@@ -171,8 +173,10 @@ def reload_and_limits(browser, r):
     with_pin(pg)
     pg.reload(); pg.wait_for_timeout(300)
     chk('no Fullscreen API: no lock screen even with a PIN and a stale kiosk flag', not pg.evaluate(GATE_UP) and pg.evaluate(MODE) == 'normal')
-    chk('...the dock has no Fullscreen button', not pg.is_visible('#fs'))
-    pg.click('#dock [data-go=settings]')
+    pg.click('#more')
+    chk('...the toolbar has no Fullscreen button', not pg.is_visible('#fs'))
+    pg.click('#more')
+    go(pg, 'settings')
     chk('...and Settings explains kiosk mode is unavailable', 'does not let LUNA go fullscreen' in pg.inner_text('#kstat') and pg.locator('#kbtn').count() == 0)
     ctx.close()
 
@@ -182,7 +186,7 @@ def unprotected(browser, r):
     ctx, pg = page(browser, r)
     enter(pg)
     chk('without a PIN, entering fullscreen warns that leaving is not protected', 'not protected' in pg.inner_text('#toast'), pg.inner_text('#toast'))
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('...and Settings says NO exit PIN is set', 'NO exit PIN is set' in pg.inner_text('#kstat'), pg.inner_text('#kstat'))
     pg.click('#kbtn'); pg.wait_for_function("!document.fullscreenElement && Kiosk.view().mode === 'normal'")
     chk('...exit is immediate, with no fake PIN screen', not pg.evaluate(GATE_UP) and pg.evaluate(MODE) == 'normal')
@@ -198,20 +202,20 @@ def features_still_work(browser, r):
     ctx, pg = page(browser, r, scripts=[MOCK_SPEECH], settings={'idleSec': 0, 'voiceOn': True})
     with_pin(pg)
     enter(pg)
-    pg.click('#dock [data-go=timer]'); pg.click('[data-m="1"]'); pg.click('#tctl [data-act=start]')
+    go(pg, 'timer'); pg.click('[data-m="1"]'); pg.click('#tctl [data-act=start]')
     chk('kiosk: the timer runs', pg.inner_text('#tst') == 'Running')
     pg.click('#tctl [data-act=cancel]')
     pg.click('.screen.on [data-go=schedules]')
     create_rule_via_ui(pg, 'Kiosk rule', '09:30', 2)
     chk('kiosk: a schedule rule can be created', 'Kiosk rule' in pg.inner_text('#rlist'))
-    pg.click('.screen.on [data-go=home]'); pg.click('#dock [data-go=assistant]')
+    pg.click('.screen.on [data-go=home]'); go(pg, 'assistant')
     pg.fill('.screen.on .cmd input', 'set a 3 minute timer'); pg.keyboard.press('Enter')
     chk('kiosk: typed assistant commands work', pg.evaluate("TimerEngine.snapshot().duration") == 180000)
     pg.click('.screen.on [data-go=home]'); pg.click('#talk'); pg.evaluate("__audio()"); pg.evaluate("__say([['pause the timer', true]])")
     chk('kiosk: push-to-talk voice commands work', pg.evaluate("TimerEngine.snapshot().state") == 'paused')
-    pg.click('#dock [data-go=backgrounds]')
+    go(pg, 'backgrounds')
     chk('kiosk: the backgrounds library opens', pg.locator('#lib .btn').count() == 7)
-    pg.click('#bgback'); pg.click('#dock [data-go=settings]')
+    pg.click('#bgback'); go(pg, 'settings')
     pg.click('button:has-text("24-hour")')
     chk('kiosk: settings still change', pg.evaluate("Settings.get().timeFormat") == '24')
     chk('kiosk: still fullscreen, still protected, no lock shown', pg.evaluate(FS) and pg.evaluate(MODE) == 'kiosk' and not pg.evaluate(GATE_UP))

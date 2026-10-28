@@ -1,7 +1,7 @@
 """Exit PIN setup in Settings: set (typed twice), change and remove (both need the current PIN), hashed storage,
 and safe failure when the browser has no Web Crypto (as on a plain-http page)."""
 import json
-from helpers import open_page, rules_storage, rule_dict, INSECURE, NO_CRYPTO
+from helpers import go, open_page, rules_storage, rule_dict, INSECURE, NO_CRYPTO
 
 SETTINGS = {'idleSec': 0}
 STAT = "document.getElementById('pinstat').textContent"
@@ -27,7 +27,7 @@ def run(browser, r):
     chk = r.check
     storage = rules_storage(rule_dict(name='Morning timer'))
     ctx, pg = open_page(browser, r, settings=SETTINGS, storage=storage, label='pin')
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('with no PIN, Settings says exit protection is NOT active', 'NOT active' in pg.evaluate(STAT), pg.evaluate(STAT))
     chk('...and the kiosk card says leaving would not be protected', 'No exit PIN is set' in pg.inner_text('#kstat'), pg.inner_text('#kstat'))
     before = json.loads(pg.evaluate(ALL_STORAGE))
@@ -72,7 +72,7 @@ def run(browser, r):
 
     # ---- survives reload and Restore defaults ----
     pg.reload(); pg.wait_for_timeout(200)
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('the PIN is still set after a reload', 'An exit PIN is set' in pg.evaluate(STAT) and pg.evaluate("PinStore.verify('3691').then(r => r.ok)"))
     pg.click('#reset'); pg.click('#yes')
     chk('Restore defaults keeps the exit PIN', json.loads(pg.evaluate(RECORD)) == changed)
@@ -92,7 +92,7 @@ def run(browser, r):
 
     # ---- no Web Crypto (what a plain-http LAN page gets): fail safe, never plaintext ----
     ctx, pg = open_page(browser, r, settings=SETTINGS, scripts=[INSECURE, NO_CRYPTO], label='pin')
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('without Web Crypto, Settings explains why a PIN cannot be set',
         'Web Crypto' in pg.evaluate(STAT) and 'https://' in pg.evaluate(STAT) and 'NOT active' in pg.evaluate(STAT), pg.evaluate(STAT))
     chk('...offers no way to set one, and nothing is stored', pg.locator('#pinnew').count() == 0 and pg.evaluate(RECORD) is None)
@@ -103,7 +103,7 @@ def run(browser, r):
     # ---- the browser refuses to store it: say so, never claim it was saved ----
     block = "(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'luna.pin.v1') throw new Error('QuotaExceededError'); return set.call(this, k, v); }; })();"
     ctx, pg = open_page(browser, r, settings=SETTINGS, scripts=[block], label='pin')
-    pg.click('#dock [data-go=settings]'); pg.click('#pinnew')
+    go(pg, 'settings'); pg.click('#pinnew')
     fill(pg, new='2580', new2='2580')
     chk('if the browser will not store the PIN, the error says so and protection stays NOT active',
         'did not save the PIN' in pg.evaluate(ERR) and 'NOT active' in pg.evaluate(STAT) and not pg.evaluate("PinStore.isSet()"), pg.evaluate(ERR))
@@ -111,7 +111,7 @@ def run(browser, r):
 
     # ---- unreadable stored record: protection is reported OFF, not pretended ----
     ctx, pg = open_page(browser, r, settings=SETTINGS, storage={'luna.pin.v1': json.dumps({'pin': '1234'})}, label='pin')
-    pg.click('#dock [data-go=settings]')
+    go(pg, 'settings')
     chk('a corrupt PIN record is reported, protection shown as NOT active', 'could not be read' in pg.evaluate(STAT), pg.evaluate(STAT))
     chk('...and a new PIN can be set over it', pg.locator('#pinnew').count() == 1)
     ctx.close()

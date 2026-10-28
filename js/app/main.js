@@ -34,6 +34,8 @@ Library.load();
 Rules.load();
 PinStore.load();
 
+safe('icons', () => Icons.decorate());
+safe('dock-menu', DockMenu.init);
 safe('settings', SettingsUI.init);
 safe('clock', () => Clock.start());
 safe('backgrounds', () => { Bg.showActive(); BgUI.init(); });
